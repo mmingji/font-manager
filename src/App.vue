@@ -200,7 +200,7 @@ async function exportProject() {
       <div v-if="!store.count" class="empty">
         <p class="empty-hint">项目还没有图标，请先导入 SVG，或上传字体文件解析</p>
         <div class="empty-actions">
-          <button class="primary" @click="showImport = true">导入 SVG</button>
+          <button @click="showImport = true">导入 SVG</button>
           <button @click="showParser = true">解析字体文件</button>
         </div>
       </div>
