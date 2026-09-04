@@ -9,21 +9,30 @@ function uid() {
 
 // 生成分组：英文按名称首字母（A-Z），数字归 '0-9'，符号归 '#'；
 // 中文图标名按拼音首字母分组（如 爱心→A、长城→C），组内按拼音排序。
+// 分组 key 固定按 A-Z → 0-9 → # 规范顺序输出（不随图标数据乱序，保证侧边导航栏稳定）
 // 注：图标名实际用于 CSS 类名/GSUB 连字仍限 ASCII；中文名仅作展示分组。
+const GROUP_KEY_ORDER = []
+for (let c = 65; c <= 90; c++) GROUP_KEY_ORDER.push(String.fromCharCode(c)) // A-Z
+GROUP_KEY_ORDER.push('0-9', '#')
+const KEY_RANK = new Map(GROUP_KEY_ORDER.map((k, i) => [k, i]))
+
 export function groupIcons(icons) {
-  const groups = []
-  const map = new Map()
-  // 排序键：拼音全键（中文转拼音）+ 原名称兜底，保证组内拼音序
-  const sorted = [...icons].sort((a, b) => {
-    const ka = pinyinFullKey(a.name)
-    const kb = pinyinFullKey(b.name)
-    if (ka < kb) return -1
-    if (ka > kb) return 1
-    return a.name < b.name ? -1 : a.name > b.name ? 1 : 0
+  // 先按"分组 key 优先级 + 组内拼音键"双重排序，保证分组固定 A-Z 序、组内拼音序
+  const annotated = icons.map((icon) => {
+    const key = groupKeyOf(icon.name)
+    const rank = KEY_RANK.has(key) ? KEY_RANK.get(key) : KEY_RANK.get('#')
+    return { icon, key, rank, sortKey: pinyinFullKey(icon.name) }
+  })
+  const sorted = annotated.sort((a, b) => {
+    if (a.rank !== b.rank) return a.rank - b.rank
+    if (a.sortKey < b.sortKey) return -1
+    if (a.sortKey > b.sortKey) return 1
+    return a.icon.name < b.icon.name ? -1 : a.icon.name > b.icon.name ? 1 : 0
   })
 
-  for (const icon of sorted) {
-    const key = groupKeyOf(icon.name)
+  const groups = []
+  const map = new Map()
+  for (const { icon, key } of sorted) {
     if (!map.has(key)) {
       map.set(key, [])
       groups.push({ key, icons: map.get(key) })

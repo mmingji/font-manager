@@ -286,6 +286,9 @@ export function normalizeSvgImport(svg, size = 512) {
     while ((pm = pathRe.exec(s)) !== null) {
       const d = pm[1].replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
       if (!d.trim()) continue
+      // 过滤孤立单点 path（如 Illustrator 导出的 M320,256 这类只有 moveTo、无轮廓的点），
+      // 否则它们会被计入 bbox 拉大整体范围，导致真实图标被缩小/偏移
+      if (!/[LCQASTZ]/i.test(d)) continue
       const cmds = parsePathCommands(d)
       if (cmds.length) allCmds.push(...cmds)
     }
