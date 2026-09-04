@@ -60,6 +60,19 @@ onUnmounted(() => document.removeEventListener('click', onDocClick))
   border-color: var(--primary);
   color: var(--primary);
 }
+/* primary 变体：下拉按钮整体作为主操作（主色背景），如"导出" */
+.dropdown.primary .trigger {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+  font-weight: 600;
+}
+.dropdown.primary .trigger:hover {
+  background: var(--primary-dark);
+  border-color: var(--primary-dark);
+  color: #fff;
+}
+.dropdown.primary .caret { opacity: 1; }
 .caret {
   margin-left: 5px;
   vertical-align: middle;

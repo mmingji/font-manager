@@ -156,9 +156,9 @@ async function exportProject() {
           <button @click="showImageToSvg = true">图片转 SVG</button>
           <button @click="showParser = true">解析字体</button>
         </DropdownMenu>
-        <!-- 导出下拉：下载项目(主) + 导出 SVG -->
-        <DropdownMenu label="导出" title="下载项目 / 导出 SVG" class="export-dd">
-          <button class="primary-item" @click="exportProject">下载项目</button>
+        <!-- 导出下拉：整个按钮为主色主操作(导出)，下载项目为普通菜单项 -->
+        <DropdownMenu label="导出" title="下载项目 / 导出 SVG" class="export-dd primary">
+          <button @click="exportProject">下载项目</button>
           <button @click="exportSvgs">导出 SVG</button>
         </DropdownMenu>
       </div>
