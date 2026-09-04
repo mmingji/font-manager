@@ -1,0 +1,99 @@
+<script setup>
+import { ref, onMounted, onUnmounted } from 'vue'
+
+// 通用下拉菜单：props.trigger 为触发按钮文字，slots 放菜单项
+// 用法：<DropdownMenu label="导入"><button>导入 SVG</button><button>图片转 SVG</button></DropdownMenu>
+defineProps({
+  label: { type: String, required: true },
+  title: { type: String, default: '' }
+})
+const open = ref(false)
+const root = ref(null)
+
+function toggle() {
+  open.value = !open.value
+}
+function close() {
+  open.value = false
+}
+// 点击页面其他区域关闭
+function onDocClick(e) {
+  if (root.value && !root.value.contains(e.target)) close()
+}
+onMounted(() => document.addEventListener('click', onDocClick))
+onUnmounted(() => document.removeEventListener('click', onDocClick))
+</script>
+
+<template>
+  <div class="dropdown" ref="root">
+    <button class="trigger" :title="title" @click.stop="toggle">
+      {{ label }}
+      <!-- 下拉三角：单色线性 svg（用 currentColor 继承按钮颜色，替换原文字光标符 ▾） -->
+      <svg class="caret" viewBox="0 0 12 8" width="10" height="7" aria-hidden="true">
+        <path d="M1 1.5 L6 6.5 L11 1.5" fill="none" stroke="currentColor" stroke-width="1.6"
+          stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+    </button>
+    <div class="menu" v-if="open" @click="close">
+      <slot></slot>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+.trigger {
+  /* 与其它顶部按钮一致 */
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all .15s;
+}
+.trigger:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.caret {
+  margin-left: 5px;
+  vertical-align: middle;
+  opacity: .65;
+  flex-shrink: 0;
+}
+.menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.1);
+  min-width: 150px;
+  padding: 6px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.menu :deep(button) {
+  border: none;
+  background: transparent;
+  text-align: left;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+.menu :deep(button:hover) {
+  background: #f0f4ff;
+  color: var(--primary);
+}
+</style>

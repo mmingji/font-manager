@@ -294,11 +294,15 @@ export function normalizeSvgImport(svg, size = 512) {
     }
     if (!allCmds.length) return { svg, changed: false }
 
-    // 检查是否已有规范坐标（已在 0~1000 内且全大写且无复杂命令）
+    // 检查是否已是"铺满 1000"的规范图标：bbox 需接近 0~1000 且全大写且无复杂命令。
+    // 注意：不能只看坐标在 0~1001 内——像 imagetracerjs 转换的像素坐标(如 34~200)也在该范围，
+    // 但实际未铺满 1000，会被误判为已规范而漏缩放。因此要求 bbox 宽高都较大(≥900)才算已规范。
     const bb = pathBBox(allCmds)
     const allUpper = allCmds.every((c) => c.raw === c.type)
     const hasComplex = allCmds.some((c) => ['H', 'V', 'S', 'T', 'A'].includes(c.type))
-    const alreadyNormal = bb.minX >= -1 && bb.minY >= -1 && bb.maxX <= 1001 && bb.maxY <= 1001 && !hasComplex
+    const w = bb.maxX - bb.minX
+    const h = bb.maxY - bb.minY
+    const alreadyNormal = w >= 900 && h >= 900 && !hasComplex
 
     if (alreadyNormal && allUpper) {
       // 已是标准格式，只统一尺寸
@@ -306,9 +310,7 @@ export function normalizeSvgImport(svg, size = 512) {
       return { svg: clean, changed: clean !== svg }
     }
 
-    // 需要归一化：缩放到 1000 内并居中
-    const w = bb.maxX - bb.minX
-    const h = bb.maxY - bb.minY
+    // 需要归一化：缩放到 1000 内并居中（w/h 已在上面定义）
     if (!(w > 0) || !(h > 0)) return { svg, changed: false }
 
     const scale = 1000 / Math.max(w, h)

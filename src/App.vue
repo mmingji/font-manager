@@ -4,7 +4,9 @@ import { useProjectStore } from './store/project'
 import IconGrid from './components/IconGrid.vue'
 import FontParser from './components/FontParser.vue'
 import ImportModal from './components/ImportModal.vue'
+import ImageToSvgModal from './components/ImageToSvgModal.vue'
 import SettingsModal from './components/SettingsModal.vue'
+import DropdownMenu from './components/DropdownMenu.vue'
 import { exportSvgZip, exportProjectZip } from './lib/zip'
 
 const store = useProjectStore()
@@ -22,6 +24,7 @@ onMounted(() => {
 // 弹窗控制
 const showParser = ref(false)
 const showImport = ref(false)
+const showImageToSvg = ref(false)
 const showSettings = ref(false)
 
 // 搜索（#1：默认隐藏，按钮展开）
@@ -146,12 +149,18 @@ async function exportProject() {
       </div>
       <div class="actions">
         <button @click="toggleSearch" :class="{ active: showSearch }" title="搜索图标">搜索</button>
-        <button @click="showImport = true" title="批量导入 SVG 或项目文件">导入</button>
-        <button @click="showParser = true" title="上传字体文件解析为 SVG">解析字体</button>
         <button @click="toggleSelectMode">{{ selectMode ? '退出多选' : '多选' }}</button>
-        <button @click="exportSvgs" title="导出 SVG 为 zip">导出 SVG</button>
         <button @click="showSettings = true" title="项目名称/CSS前缀/字体名/SVG尺寸">设置</button>
-        <button class="primary" @click="exportProject" title="下载 ttf/woff/woff2/css/demo">下载项目</button>
+        <DropdownMenu label="导入" title="导入 SVG / 图片转 SVG / 解析字体">
+          <button @click="showImport = true">导入 SVG</button>
+          <button @click="showImageToSvg = true">图片转 SVG</button>
+          <button @click="showParser = true">解析字体</button>
+        </DropdownMenu>
+        <!-- 导出下拉：下载项目(主) + 导出 SVG -->
+        <DropdownMenu label="导出" title="下载项目 / 导出 SVG" class="export-dd">
+          <button class="primary-item" @click="exportProject">下载项目</button>
+          <button @click="exportSvgs">导出 SVG</button>
+        </DropdownMenu>
       </div>
     </header>
 
@@ -185,8 +194,9 @@ async function exportProject() {
           idx >= 0 ? selectedIds.splice(idx, 1) : selectedIds.push(id)
         }"
       />
+      <!-- 首次打开/无图标时的引导提示（替代"没有匹配的图标"，引导用户导入或解析） -->
       <div v-if="!store.count" class="empty">
-        <p>项目还没有图标</p>
+        <p class="empty-hint">项目还没有图标，请先导入 SVG，或上传字体文件解析</p>
         <div class="empty-actions">
           <button class="primary" @click="showImport = true">导入 SVG</button>
           <button @click="showParser = true">解析字体文件</button>
@@ -196,6 +206,7 @@ async function exportProject() {
 
     <FontParser v-if="showParser" @close="showParser = false" />
     <ImportModal v-if="showImport" @close="showImport = false" />
+    <ImageToSvgModal v-if="showImageToSvg" @close="showImageToSvg = false" />
     <SettingsModal v-if="showSettings" @close="showSettings = false" />
   </div>
 </template>
@@ -328,6 +339,12 @@ async function exportProject() {
   text-align: center;
   padding: 80px 0;
   color: var(--text-2);
+}
+
+.empty-hint {
+  font-size: 15px;
+  color: var(--text);
+  margin: 0 0 16px;
 }
 
 .empty-actions {

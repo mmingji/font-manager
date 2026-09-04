@@ -44,3 +44,5 @@ Cheatsheet*.pdf
 
 # 下载的项目 demo 产物（由 buildDemoHtml 生成，不入库）
 snfont-regular-demo/
+# ===== 测试素材 =====
+icontest.png
