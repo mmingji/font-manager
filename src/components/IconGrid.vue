@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue'
-import { groupIcons } from '../store/project'
+import { groupIcons, useProjectStore } from '../store/project'
 import IconCard from './IconCard.vue'
 
 const props = defineProps({
@@ -10,8 +10,13 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['toggle-select'])
+const store = useProjectStore()
 
 const groups = computed(() => groupIcons(props.icons))
+// 区分"项目无图标"与"有图标但搜索/过滤无结果"：
+// 仅当项目确实有图标(store.count>0)且当前分组为空时才提示"没有匹配的图标"；
+// 首次打开(无图标)时不提示，由 App 的空状态引导替代
+const showNoResult = computed(() => !groups.value.length && store.count > 0)
 
 // 字母索引条：只显示有图标的字母
 const indexLetters = computed(() => groups.value.map((g) => g.key))
@@ -44,7 +49,7 @@ function scrollToGroup(key) {
           />
         </div>
       </section>
-      <div v-if="!groups.length" class="no-result">没有匹配的图标</div>
+      <div v-if="showNoResult" class="no-result">没有匹配的图标</div>
     </div>
 
     <nav v-if="indexLetters.length > 1" class="index-bar">

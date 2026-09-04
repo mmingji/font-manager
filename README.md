@@ -14,6 +14,9 @@
 | 导入 | 批量拖入 SVG（先预览可改名、勾选）、导入 `snfont-project.json` 恢复项目 |
 | 字体能力 | ① **GSUB 连字**：输入图标名自动替换为图标（Word/PS/浏览器均支持）；② 字形名写入 post 表，字符映射表可按名搜索；③ 字形 y 坐标已修正，Word/PS 显示正常；④ **稳定码位**：图标码位永久固定，删除不释放、改名不影响；⑤ **内置拉丁字形取自真实字体**（latin-regular/bold.woff2，可见 ASCII 94 字符全量提取），连字触发字符显示正常；⑥ 基础字符字重可选（常规/粗体），产物分别命名 |
 | 预览页 | demo.html 图标为**真实 unicode 文本**（可鼠标选中复制到 PS 显示图标）、搜索框在标题栏、首字母分组、点击名称/unicode/类名复制 + Toast 提示 |
+| 顶部交互 | 顶部按钮重排：搜索｜多选｜设置｜**导入 ▾**(导入SVG/图片转SVG/解析字体)｜**导出 ▾**(下载项目/导出SVG)，下拉三角为单色线性 svg；首次打开显示引导「请先导入 SVG 或上传字体解析」 |
+| 离线运行 | `启动服务.bat` 双击起本地服务 + 开浏览器（http://localhost:2333），`关闭服务.bat` 停止，无需命令行、无需联网 |
+| 图片转 SVG | 弹窗入口，当前为「功能开发中」占位（无实际转换，待后续；矢量化难点已记录） |
 
 ## 技术栈
 
@@ -27,12 +30,15 @@
 
 要求：Node.js ≥ 18
 
+### 开发模式
 ```bash
 npm install        # 安装依赖
 npm run dev        # 开发模式，访问 http://localhost:5173
 npm run build      # 构建到 dist/
-npm run preview    # 本地预览构建产物
 ```
+
+### 本地运行（离线、双击）
+构建 dist 后，双击 **`启动服务.bat`** → 自动起本地服务并打开 http://localhost:2333；双击 **`关闭服务.bat`** 停止。无需命令行、无需联网。
 
 ## 部署
 
@@ -40,15 +46,15 @@ npm run preview    # 本地预览构建产物
 
 - Nginx / Apache：直接把 `dist/` 作为站点根目录
 - GitHub Pages / Vercel / Netlify：上传 `dist/` 即可
-- 内网 / 本地：把 `dist/` 放到共享目录或直接双击 `dist/index.html` 打开（需注意浏览器 localStorage 的可用性）
+- 内网 / 本地：双击页面根目录的 `启动服务.bat`（基于 `server.mjs` 的本地静态服务），自动打开 http://localhost:2333；无需命令行。也可把 `dist/` 发布到任意静态托管
 
 无数据库、无后端服务，运行时零环境依赖。
 
 ## 使用流程
 
-1. **解析字体**：点击顶部「解析字体」→ 选择 SVG 尺寸 → 拖入字体文件 → 预览字形（可改名）→ 勾选 → 「导入项目」或「下载 SVG」；可选「保持原字体 unicode」或用 unicode→名称映射表自动命名；文件 >10MB / 字形 >5000 会提示但不阻断；解析失败原因会回显
+1. **解析字体**：顶部「**导入▾**」下拉 →「解析字体」→ 选择 SVG 尺寸 → 拖入字体文件 → 预览字形（可改名）→ 勾选 → 「导入项目」或「下载 SVG」；可选「保持原字体 unicode」或用 unicode→名称映射表自动命名；文件 >10MB / 字形 >5000 会提示但不阻断；解析失败原因会回显
 2. **管理图标**：主页面按首字母分组展示；卡片显示 unicode 码位，hover 显示「改名」「删除」；右上角「多选」可批量删除/导出；「设置」可改项目名/CSS 前缀/字体名/SVG 尺寸
-3. **下载项目**：点击「下载项目」，得到 `snfont-regular-project.zip`（或 `snfont-bold-project.zip`），zip 内按产物名建文件夹，内含三种字体格式 + CSS + 预览页 `demo.html`
+3. **下载项目**：顶部「**导出▾**」下拉 →「下载项目」（主色强调），得到 `snfont-regular-project.zip`（或 `snfont-bold-project.zip`），zip 内按产物名建文件夹，内含三种字体格式 + CSS + 预览页 `demo.html`
 4. **使用字体**：
    - Web：引入 `snfont-regular.css`（或 `snfont-bold.css`），用 `<i class="sn-trash"></i>` 显示图标
    - 桌面（Word/PS）：安装 `snfont-regular.ttf`（或 `snfont-bold.ttf`），**直接输入图标名（如 `trash`）自动变为图标**（GSUB 连字）；也可打开字符映射表按字形名搜索插入
@@ -68,8 +74,13 @@ src/
 │  ├─ zip.js            # zip 打包（SVG / 项目包 / demo.html）
 │  └─ persist.js        # localStorage + 项目 JSON 导入导出
 ├─ store/project.js     # Pinia 状态：CRUD、分组、稳定码位、项目配置
-└─ components/          # 页面组件
+└─ components/          # 页面组件（含 DropdownMenu 下拉/ImageToSvgModal 图片转SVG占位）
 ```
+
+根目录另有：
+- `server.mjs`：本地静态服务（双击 `启动服务.bat` 调用）
+- `启动服务.bat` / `关闭服务.bat`：双击启停本地服务
+- `项目交接文档.md`：项目交接说明（状态/文件结构/待办/关键决策）
 
 ## 说明
 

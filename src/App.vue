@@ -185,7 +185,9 @@ async function exportProject() {
     </section>
 
     <main class="content" :class="{ empty: !store.count }">
+      <!-- 项目有图标时渲染网格；无图标时只显示引导提示(避免空网格+引导叠加) -->
       <IconGrid
+        v-if="store.count"
         :icons="filteredIcons"
         :select-mode="selectMode"
         :selected-ids="selectedIds"

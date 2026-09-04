@@ -96,4 +96,14 @@ onUnmounted(() => document.removeEventListener('click', onDocClick))
   background: #f0f4ff;
   color: var(--primary);
 }
+/* 主操作项(如"下载项目")：主色强调，区别于普通菜单项 */
+.menu :deep(button.primary-item) {
+  background: var(--primary);
+  color: #fff;
+  font-weight: 600;
+}
+.menu :deep(button.primary-item:hover) {
+  background: var(--primary-dark);
+  color: #fff;
+}
 </style>
