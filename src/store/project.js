@@ -59,7 +59,9 @@ export const useProjectStore = defineStore('project', {
       // 分配区间：U+EE00–U+EFFF（512 个），避开参考字体已占用的 E000–E8CC / F000+ 码位
       // 旧项目 nextCode 已推进过也保留（不回退），新图标统一从 EE00 起按序取用；
       // 若 EE00–EFFF 用尽则自然顺延（512 个通常足够一个图标项目）
-      nextCode: saved?.nextCode || 0xee00
+      nextCode: saved?.nextCode || 0xee00,
+      // 启动完成标志：首帧渲染前先完成 IDB hydrate，避免「先空白再闪现完整列表」
+      booted: false
     }
   },
 
@@ -93,21 +95,28 @@ export const useProjectStore = defineStore('project', {
 
     // 启动时从 IndexedDB 恢复（本地存储快照可能只到容量上限前的旧版本）
     // 若 IDB 数据存在且图标数不少于当前（说明 LS 快照被截断过），用 IDB 覆盖
-    async hydrateFromIdb() {
-      const fromIdb = await loadProjectFromIdb()
-      if (!fromIdb || !Array.isArray(fromIdb.icons)) return
-      const lsCount = this.icons.length
-      const idbCount = fromIdb.icons.length
-      // 以较完整的一份为准：优先 IDB（可能含 LS 存不下的完整数据）
-      if (idbCount >= lsCount) {
-        this.name = fromIdb.name || this.name
-        this.icons = fromIdb.icons
-        this.svgSize = fromIdb.svgSize ?? this.svgSize
-        this.classPrefix = fromIdb.classPrefix || this.classPrefix
-        this.fontName = fromIdb.fontName || this.fontName
-        this.weight = fromIdb.weight || this.weight
-        this.nextCode = fromIdb.nextCode || this.nextCode
-      }
+    // 启动引导：从 IndexedDB 恢复完整项目后再放行首帧渲染
+    // 背景：3000+ 图标时 localStorage 快照超限写不下，store 同步初始化读到的是空/旧数据；
+    // 若先渲染再异步 hydrate，会出现「先空白再闪现完整列表」。用 booted gate 等 hydrate 完成。
+    async bootstrap() {
+      try {
+        const fromIdb = await loadProjectFromIdb()
+        if (fromIdb && Array.isArray(fromIdb.icons)) {
+          const lsCount = this.icons.length
+          const idbCount = fromIdb.icons.length
+          // 以较完整的一份为准：优先 IDB（可能含 LS 存不下的完整数据）
+          if (idbCount >= lsCount) {
+            this.name = fromIdb.name || this.name
+            this.icons = fromIdb.icons
+            this.svgSize = fromIdb.svgSize ?? this.svgSize
+            this.classPrefix = fromIdb.classPrefix || this.classPrefix
+            this.fontName = fromIdb.fontName || this.fontName
+            this.weight = fromIdb.weight || this.weight
+            this.nextCode = fromIdb.nextCode || this.nextCode
+          }
+        }
+      } catch { /* 恢复失败则用 localStorage 已有数据 */ }
+      this.booted = true
     },
 
     renameProject(name) {

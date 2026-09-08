@@ -19,8 +19,8 @@ onMounted(async () => {
   const flush = () => flushPendingSnapshot()
   window.addEventListener('pagehide', flush)
   window.addEventListener('beforeunload', flush)
-  // 先从 IndexedDB 恢复完整项目（若 localStorage 快照被容量截断，IDB 里有全量数据）
-  await store.hydrateFromIdb()
+  // 启动引导：先完成 IDB 数据恢复（booted gate 挡住首帧，避免「空白→闪现完整列表」）
+  await store.bootstrap()
   const n = store.repairAll()
   if (n > 0) {
     repairNotice.value = `已自动修复 ${n} 个异常图标（坐标越界）`
@@ -137,7 +137,9 @@ async function exportProject() {
 </script>
 
 <template>
-  <div class="app">
+  <!-- 启动引导占位：等待 store.bootstrap() 从 IndexedDB 恢复项目数据后渲染完整界面，避免空白闪现 -->
+  <div v-if="!store.booted" class="boot-loading"><div class="spinner"></div><p>加载中…</p></div>
+  <div class="app" v-if="store.booted">
     <header class="topbar">
       <div class="brand">
         <div class="brand-text">
@@ -361,5 +363,31 @@ async function exportProject() {
   gap: 10px;
   justify-content: center;
   margin-top: 16px;
+}
+
+/* 启动引导加载占位：居中显示 spinner + 文案 */
+.boot-loading {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: var(--text-2);
+}
+.boot-loading p {
+  margin: 0;
+  font-size: 13px;
+}
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: boot-spin 0.8s linear infinite;
+}
+@keyframes boot-spin {
+  to { transform: rotate(360deg); }
 }
 </style>
