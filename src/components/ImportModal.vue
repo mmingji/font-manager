@@ -124,7 +124,7 @@ const previewCount = computed(() => previews.value.filter((p) => p.selected).len
 </script>
 
 <template>
-  <div class="modal-mask" @click.self="emit('close')">
+  <div class="modal-mask">
     <div class="modal">
       <header>
         <h3>导入图标</h3>

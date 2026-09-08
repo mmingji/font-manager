@@ -4,7 +4,7 @@ import { parseFontFile, isFontFile } from '../lib/parseFont'
 import { exportSvgZip } from '../lib/zip'
 import { useProjectStore } from '../store/project'
 import { parseUnicodeMap, applyUnicodeNameMap, loadBuiltinMap } from '../lib/unicodeMap'
-import { RESERVED_START, RESERVED_END } from '../lib/codepointPlan'
+import { isBaseAscii } from '../lib/codepointPlan'
 
 const emit = defineEmits(['close'])
 const store = useProjectStore()
@@ -20,6 +20,8 @@ const parsed = ref([]) // { name, svg, unicode, advanceWidth }
 const size = ref(512)
 const customSize = ref('')
 const selected = ref(new Set())
+// ASCII 基础区(0x20-0x7E)冲突字形下标集合：与内置字母/数字/符号同码位，保持原码位会导致字体构建报错
+const conflictIndices = ref(new Set())
 // #7：保持原字体 unicode 码（#8：默认选中）
 const keepUnicode = ref(true)
 // #8：unicode→名称映射
@@ -84,6 +86,17 @@ async function handleFiles(files) {
     parsed.value = icons
     fileInfo.value = { name: fontFile.name, count: icons.length }
     selected.value = new Set(icons.map((_, i) => i))
+    // 计算码位冲突（仅保持原 unicode 时生效；不保持则自动分配会跳过已占用码位，不会撞）
+    // 冲突 = 与内置基础字符同码位(ASCII 0x20-0x7E) ∪ 与项目已有图标占用码位相同
+    const conf = new Set()
+    if (keepUnicode.value) {
+      const usedCodes = new Set(store.icons.map((ic) => ic.code))
+      icons.forEach((it, i) => {
+        if (it.unicode == null) return
+        if (isBaseAscii(it.unicode) || usedCodes.has(it.unicode)) conf.add(i)
+      })
+    }
+    conflictIndices.value = conf
   } catch (e) {
     // #6：解析失败原因回显
     error.value = '解析失败：' + (e?.message || e)
@@ -92,12 +105,18 @@ async function handleFiles(files) {
   }
 }
 
+function toggleSelect(i) {
+  // 整体替换 Set 引用而非原地增删：Vue 3 的 ref 不追踪 Set 内部变化，否则 :class 不刷新
+  const next = new Set(selected.value)
+  if (next.has(i)) next.delete(i)
+  else next.add(i)
+  selected.value = next
+}
 function toggleAll() {
-  if (selected.value.size === parsed.value.length) {
-    selected.value = new Set()
-  } else {
-    selected.value = new Set(parsed.value.map((_, i) => i))
-  }
+  // 全选/取消全选：整体替换 Set 引用（同上理由，保证 :class 响应式更新）
+  selected.value = selected.value.size === parsed.value.length
+    ? new Set()
+    : new Set(parsed.value.map((_, i) => i))
 }
 
 const exportable = computed(() =>
@@ -110,26 +129,48 @@ async function downloadSvgs() {
 }
 
 function importToProject() {
-  const items = exportable.value.map((p) => ({
+  // 底部「导入项目」：导入全部选中项；ASCII 冲突项由 store 内建保护自动改分配码位
+  doImport(null)
+}
+
+// 预览区冲突操作 ①：冲突字形自动分配码位 → 全部选中项正常导入（store 内对 ASCII 命中自动分配）
+function assignConflictAuto() {
+  doImport(null)
+}
+
+// 预览区冲突操作 ②：剔除冲突字形后导入其余选中项
+function removeConflictItems() {
+  // 收集「选中且非冲突」的 exportable 序号：exportable 与 parsed 同序过滤，逐项对照
+  const keepIdx = []
+  let exp = 0
+  for (let i = 0; i < parsed.value.length; i++) {
+    if (!selected.value.has(i)) continue
+    if (!conflictIndices.value.has(i)) keepIdx.push(exp)
+    exp++
+  }
+  doImport(new Set(keepIdx))
+}
+
+// 统一导入入口：indices=null 表示导入全部 exportable；indices=Set 表示仅导入集合内序号
+// ASCII 基础区命中由 store.addIcons 内建保护自动改分配，导入不会因重复码位失败
+function doImport(indices) {
+  const src = indices == null
+    ? exportable.value
+    : exportable.value.filter((_, i) => indices.has(i))
+  if (!src.length) {
+    alert('没有可导入的图标（冲突字形已全部移除）')
+    emit('close')
+    return
+  }
+  const items = src.map((p) => ({
     name: p.name,
     svg: p.svg,
-    // #7：保持原 unicode 时传 unicode 码，否则 null 走稳定分配
+    // #7：保持原 unicode 时传 unicode 码，否则 null 走稳定分配；
+    // ASCII 基础区命中由 store.addIcons 内建保护强制改自动分配，无需在此特殊处理
     code: keepUnicode.value && p.unicode != null ? p.unicode : null
   }))
-  // 保持原 unicode 的码位若落在本项目保留区（U+EE00–U+EFFF），先提醒确认
-  const kept = items.filter((it) => it.code != null).map((it) => it.code)
-  const reservedHits = [...new Set(kept.map((c) => {
-    const n = typeof c === 'number' ? c : parseInt(String(c), 16)
-    return (n >= RESERVED_START && n <= RESERVED_END) ? n : null
-  }).filter((x) => x != null))]
-  if (reservedHits.length) {
-    const list = reservedHits.slice(0, 8).map((c) => 'U+' + c.toString(16).toUpperCase().padStart(4, '0')).join(', ')
-    const more = reservedHits.length > 8 ? ' 等 ' + reservedHits.length + ' 个码位' : ''
-    if (!confirm('⚠️ 所选字形中有 ' + reservedHits.length + ' 个原 unicode 码位落在本项目保留区（U+EE00–U+EFFF）：\n' + list + more + '\n\n该区域是「新增图标自动分配」使用的区间。\n建议：取消勾选「保持原字体 unicode」让这些字形走自动分配，或继续导入（保留原码位）。\n\n点击「确定」继续导入；点击「取消」返回调整。')) {
-      return
-    }
-  }
-  const res = store.addIcons(items)
+  // 保留区未占用时不冲突，正常导入；已占用码位已在预览区冲突条标红并提供处理
+const res = store.addIcons(items)
   if (res.overflow) alert(res.overflow)
   emit('close')
 }
@@ -169,7 +210,7 @@ function miniSvg(svg) {
 </script>
 
 <template>
-  <div class="modal-mask" @click.self="emit('close')">
+  <div class="modal-mask">
     <div class="modal">
       <header>
         <h3>解析字体文件</h3>
@@ -232,18 +273,28 @@ function miniSvg(svg) {
           <div class="preview-head">
             <label><input type="checkbox" :checked="selected.size === parsed.length && parsed.length > 0" @change="toggleAll" /> 全选</label>
             <span>{{ selected.size }} / {{ parsed.length }}</span>
+            <!-- 冲突字形检测提示 + 处理操作（仅存在 ASCII 基础区冲突时显示） -->
+            <span v-if="conflictIndices.size" class="conflict-bar">
+              <span class="conflict-info">
+                <span class="conflict-dot">⚠</span>
+                检测到 {{ conflictIndices.size }} 个冲突字符
+                <span class="conflict-tip">这些字形与内置基础拉丁字符（ASCII 0x20–0x7E，字母/数字/符号区）使用相同码位。该区字形已内置用于正常输入字母与 GSUB 连字触发；若保留原码位，生成字体时会发生重复码位错误而失败。选择下方处理方式：</span>
+              </span>
+              <button class="mini-btn" @click="assignConflictAuto" title="冲突字形保留导入，码位改为自动分配（U+EE00+ 保留区，与内置字母互不干扰）">自动分配</button>
+              <button class="mini-btn danger" @click="removeConflictItems" title="丢弃这些与内置字母冲突的字形，仅导入其余字形">移除冲突</button>
+            </span>
           </div>
           <div class="icon-list">
             <div
               v-for="(item, i) in parsed"
               :key="item.name + i"
               class="icon-item"
-              :class="{ on: selected.has(i) }"
-              @click="selected.has(i) ? selected.delete(i) : selected.add(i)"
+              :class="{ on: selected.has(i), conflict: conflictIndices.has(i) }"
+              @click="toggleSelect(i)"
             >
-              <input type="checkbox" :checked="selected.has(i)" @click.stop />
+              <input type="checkbox" :checked="selected.has(i)" @change="toggleSelect(i)" @click.stop />
               <div class="mini" v-html="miniSvg(item.svg)"></div>
-              <span class="iname" :title="item.name">{{ item.name }}</span>
+              <span class="iname" :title="conflictIndices.has(i) ? '码位冲突：与内置基础字符/项目已占用码位相同' : item.name">{{ item.name }}</span>
               <span class="icode" v-if="item.unicode != null">{{ item.unicode.toString(16).toUpperCase().padStart(4, '0') }}</span>
               <!-- #11：预览改名 -->
               <button class="rename-btn" type="button" @click.stop="renameItem(i)" title="改名">改名</button>
@@ -255,7 +306,7 @@ function miniSvg(svg) {
       <footer>
         <button @click="emit('close')">取消</button>
         <template v-if="parsed.length">
-          <button @click="importToProject" :disabled="!exportable.length" class="primary">导入项目 ({{ exportable.length }})</button>
+          <button @click="importToProject" :disabled="!exportable.length || conflictIndices.size > 0" class="primary" :title="conflictIndices.size ? '存在冲突字形，请先使用上方的「自动分配」或「移除冲突」处理' : ''">导入项目 ({{ exportable.length }})</button>
           <button @click="downloadSvgs" :disabled="!exportable.length">下载 SVG (zip)</button>
         </template>
       </footer>
@@ -503,6 +554,78 @@ header h3 {
   cursor: pointer;
   position: relative;
 }
+
+
+/* 冲突字形（与内置基础字符或项目已占用码位相同）：标红提示 */
+.icon-item.conflict {
+  border-color: #e11d48;
+  background: #fff1f2;
+}
+.icon-item.conflict.on {
+  border-color: #e11d48;
+  background: #ffe4e6;
+}
+/* 预览头部冲突提示条 */
+.conflict-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.conflict-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #b91c1c;
+  position: relative;
+  cursor: default;
+}
+.conflict-dot {
+  width: 16px; height: 16px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: #fecaca;
+  color: #b91c1c;
+  font-size: 11px;
+  font-weight: 700;
+}
+/* 悬浮解释：hover 显示完整说明 */
+.conflict-tip {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 340px;
+  background: #fff;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.12);
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #4b5563;
+  z-index: 20;
+  white-space: normal;
+  font-weight: 400;
+}
+.conflict-info:hover .conflict-tip { display: block; }
+/* 冲突处理小按钮 */
+.mini-btn {
+  padding: 3px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  transition: all .15s;
+}
+.mini-btn:hover { border-color: var(--primary); color: var(--primary); }
+.mini-btn.danger { color: #b91c1c; border-color: #fecaca; background: #fff; }
+.mini-btn.danger:hover { background: #fff1f2; border-color: #e11d48; }
 
 .icon-item.on {
   border-color: var(--primary);

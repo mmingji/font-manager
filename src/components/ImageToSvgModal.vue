@@ -5,7 +5,7 @@ const emit = defineEmits(['close'])
 </script>
 
 <template>
-  <div class="modal-mask" @click.self="emit('close')">
+  <div class="modal-mask">
     <div class="modal">
       <header>
         <h3>图片转 SVG</h3>

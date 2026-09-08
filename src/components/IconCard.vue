@@ -85,7 +85,7 @@ function remove() {
     @click="selectMode && emit('toggle-select')"
   >
     <label v-if="selectMode" class="check" @click.stop>
-      <input type="checkbox" :checked="selected" @change="emit('toggle-select')" />
+      <input type="checkbox" :checked="selected" @change="emit('toggle-select')" @click.stop />
     </label>
 
     <!-- #13：内容整体居中，hover 上移，底部留出按钮空间 -->

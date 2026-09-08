@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { loadProject, saveProject } from '../lib/persist.js'
 import { normalizeSvg } from '../lib/buildFont.js'
 import { groupKeyOf, pinyinFullKey } from '../lib/pinyin.js'
-import { isInReserved, reservedUsage, RESERVED_END } from '../lib/codepointPlan.js'
+import { isInReserved, isBaseAscii, reservedUsage, RESERVED_END } from '../lib/codepointPlan.js'
 
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
@@ -161,14 +161,22 @@ export const useProjectStore = defineStore('project', {
       const before = reservedUsage(this.icons)
       for (const item of items) {
         const keep = item.code
-        const code = keep != null
+        const num = keep != null && typeof keep !== 'number' ? parseInt(String(keep), 16) : keep
+        // 保持原码位命中内置基础 ASCII 区（字母/数字/符号）：这些码位必须留给内置字形，
+        // 否则生成字体时 fonteditor 抛「Repeat unicode」导致整包失败 → 强制改自动分配
+        const asciiBlocked = num != null && isBaseAscii(num)
+        const code = asciiBlocked
           ? (() => {
-              const num = typeof keep === 'number' ? keep : parseInt(String(keep), 16)
-              const alert = this.reservedAlertForCode(num)
-              if (alert) codeAlerts.push(alert)
-              return this.allocateCode(keep)
+              codeAlerts.push('⚠️ ' + num.toString(16).toUpperCase().padStart(4, '0') + ' 命中内置基础字符区（ASCII 0x20–0x7E），已改为自动分配码位（该区必须保留给字母/符号）')
+              return this.allocateCode()
             })()
-          : this.allocateCode()
+          : keep != null
+            ? (() => {
+                const alert = this.reservedAlertForCode(num)
+                if (alert) codeAlerts.push(alert)
+                return this.allocateCode(keep)
+              })()
+            : this.allocateCode()
         added.push({ id: uid(), name: this.uniqueName(item.name), svg: item.svg, code })
       }
       this.icons.push(...added)
@@ -261,9 +269,15 @@ export const useProjectStore = defineStore('project', {
           let code
           if (i.code != null) {
             const num = typeof i.code === 'number' ? i.code : parseInt(String(i.code), 16)
-            const alert = this.reservedAlertForCode(num)
-            if (alert) codeAlerts.push(alert)
-            code = this.allocateCode(i.code)
+            if (isBaseAscii(num)) {
+              // 命中内置基础字符区：强制自动分配（否则字体构建报重复码位）
+              codeAlerts.push('⚠️ ' + num.toString(16).toUpperCase().padStart(4, '0') + ' 命中内置基础字符区（ASCII 0x20–0x7E），已改为自动分配码位')
+              code = this.allocateCode()
+            } else {
+              const alert = this.reservedAlertForCode(num)
+              if (alert) codeAlerts.push(alert)
+              code = this.allocateCode(i.code)
+            }
           } else {
             code = this.allocateCode()
           }
