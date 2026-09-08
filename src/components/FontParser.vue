@@ -4,6 +4,7 @@ import { parseFontFile, isFontFile } from '../lib/parseFont'
 import { exportSvgZip } from '../lib/zip'
 import { useProjectStore } from '../store/project'
 import { parseUnicodeMap, applyUnicodeNameMap, loadBuiltinMap } from '../lib/unicodeMap'
+import { RESERVED_START, RESERVED_END } from '../lib/codepointPlan'
 
 const emit = defineEmits(['close'])
 const store = useProjectStore()
@@ -105,7 +106,7 @@ const exportable = computed(() =>
 
 async function downloadSvgs() {
   const icons = exportable.value.map((p) => ({ name: p.name, svg: p.svg }))
-  await exportSvgZip(icons, size.value, 'snfont-svgs.zip')
+  await exportSvgZip(icons, size.value, `${store.fontName}-svgs.zip`)
 }
 
 function importToProject() {
@@ -115,7 +116,21 @@ function importToProject() {
     // #7：保持原 unicode 时传 unicode 码，否则 null 走稳定分配
     code: keepUnicode.value && p.unicode != null ? p.unicode : null
   }))
-  store.addIcons(items)
+  // 保持原 unicode 的码位若落在本项目保留区（U+EE00–U+EFFF），先提醒确认
+  const kept = items.filter((it) => it.code != null).map((it) => it.code)
+  const reservedHits = [...new Set(kept.map((c) => {
+    const n = typeof c === 'number' ? c : parseInt(String(c), 16)
+    return (n >= RESERVED_START && n <= RESERVED_END) ? n : null
+  }).filter((x) => x != null))]
+  if (reservedHits.length) {
+    const list = reservedHits.slice(0, 8).map((c) => 'U+' + c.toString(16).toUpperCase().padStart(4, '0')).join(', ')
+    const more = reservedHits.length > 8 ? ' 等 ' + reservedHits.length + ' 个码位' : ''
+    if (!confirm('⚠️ 所选字形中有 ' + reservedHits.length + ' 个原 unicode 码位落在本项目保留区（U+EE00–U+EFFF）：\n' + list + more + '\n\n该区域是「新增图标自动分配」使用的区间。\n建议：取消勾选「保持原字体 unicode」让这些字形走自动分配，或继续导入（保留原码位）。\n\n点击「确定」继续导入；点击「取消」返回调整。')) {
+      return
+    }
+  }
+  const res = store.addIcons(items)
+  if (res.overflow) alert(res.overflow)
   emit('close')
 }
 

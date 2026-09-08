@@ -5,13 +5,14 @@
 // 1. 嵌套格式: { "icon-name": { "unicode": "f8f8", ... } }
 // 2. 扁平格式: { "f8f8": "icon-name" } 或 { "icon-name": "f8f8" }
 
-// 加载内置映射表（从 public 静态资源；force=true 时绕过缓存重新拉取）
+// 加载内置映射表（从 public 静态资源；force=true 时绕过内存缓存重新拉取）
+// fetch 固定 cache:'no-cache'：确保打开/刷新页面时总是读取磁盘上的最新 unicode-map.json（不被浏览器 HTTP 缓存）
 const MAP_URL = './unicode-map.json'
 let builtinCache = null
 export async function loadBuiltinMap(force = false) {
   if (builtinCache && !force) return builtinCache
   try {
-    const res = await fetch(MAP_URL, { cache: force ? 'no-cache' : 'default' })
+    const res = await fetch(MAP_URL, { cache: 'no-cache' })
     if (!res.ok) return {}
     const data = await res.json()
     // 归一化为 { hexCode: name }

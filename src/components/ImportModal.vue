@@ -49,8 +49,12 @@ async function handleFiles(files) {
       try {
         const data = JSON.parse(text)
         if (data && Array.isArray(data.icons) && data.icons.length) {
-          const count = store.importProject(data)
-          imported += count
+          const res = store.importProject(data)
+          imported += (typeof res === 'number' ? res : res.count)
+          const msgs = []
+          if (res && res.codeAlerts && res.codeAlerts.length) msgs.push(...res.codeAlerts)
+          if (res && res.overflow) msgs.push(res.overflow)
+          if (msgs.length) alert(msgs.join('\n'))
         } else {
           error.value = '无效的项目文件（缺少 icons）'
         }
@@ -60,11 +64,18 @@ async function handleFiles(files) {
     }
 
     // #11：SVG 先进预览（规范化 + 可改名 + 勾选）
+    // #11：SVG 规范化提示用计数累积（多个文件被规范化时逐次覆盖会误导为只有最后一个）
+    let normalizedCount = 0
     for (const { file, text } of svgs) {
       const name = file.name.replace(/\.svg$/i, '')
       const { svg: clean, changed } = normalizeSvgImport(text, store.svgSize)
       previews.value.push({ id: Date.now() + Math.random(), name, svg: clean, selected: true })
-      if (changed) importedNote.value = `（${name} 已自动规范化坐标）`
+      if (changed) normalizedCount++
+    }
+    if (normalizedCount > 0) {
+      importedNote.value = normalizedCount === 1
+        ? '（1 个 SVG 已自动规范化坐标）'
+        : `（${normalizedCount} 个 SVG 已自动规范化坐标）`
     }
 
     if (imported) {
@@ -83,7 +94,8 @@ function confirmImport() {
     .filter((p) => p.selected)
     .map((p) => ({ name: p.name, svg: p.svg }))
   if (items.length) {
-    store.addIcons(items)
+    const res = store.addIcons(items)
+    if (res && res.overflow) alert(res.overflow)
     previews.value = []
     emit('close')
   }

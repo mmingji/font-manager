@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
-import { loadProject, saveProject, clearProject, downloadProjectJson } from '../lib/persist.js'
+import { loadProject, saveProject } from '../lib/persist.js'
 import { normalizeSvg } from '../lib/buildFont.js'
 import { groupKeyOf, pinyinFullKey } from '../lib/pinyin.js'
+import { isInReserved, reservedUsage, RESERVED_END } from '../lib/codepointPlan.js'
 
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
@@ -55,7 +56,10 @@ export const useProjectStore = defineStore('project', {
       fontName: saved?.fontName || 'snfont',      // 字体名称
       weight: saved?.weight || 'regular',         // 基础字符字重：regular | bold（决定生成字体里的字母/符号取哪套）
       // 稳定码位游标：只增不减，删除图标不释放码位（#15）
-      nextCode: saved?.nextCode || 0xe000
+      // 分配区间：U+EE00–U+EFFF（512 个），避开参考字体已占用的 E000–E8CC / F000+ 码位
+      // 旧项目 nextCode 已推进过也保留（不回退），新图标统一从 EE00 起按序取用；
+      // 若 EE00–EFFF 用尽则自然顺延（512 个通常足够一个图标项目）
+      nextCode: saved?.nextCode || 0xee00
     }
   },
 
@@ -112,6 +116,16 @@ export const useProjectStore = defineStore('project', {
       this.persist()
     },
 
+
+    // 检查「保持原 unicode」的码位是否落在保留区（会与自动分配图标争抢该区，提示用户权衡）
+    // 返回值非空字符串即需提醒；空字符串表示码位不在保留区
+    reservedAlertForCode(code) {
+      if (isInReserved(code)) {
+        return '⚠️ ' + code.toString(16).toUpperCase().padStart(4, '0') + ' 落在本项目保留区（U+EE00–U+EFFF），与自动分配的新图标区域重叠，建议取消「保持原字体 unicode」或改用其他码位'
+      }
+      return ''
+    },
+
     // 分配一个稳定码位（#15：只增不减，绝不复用已释放的码位）
     allocateCode(keepUnicode = null) {
       if (keepUnicode != null) {
@@ -133,28 +147,42 @@ export const useProjectStore = defineStore('project', {
     },
 
     addIcon(name, svg, keepUnicode = null) {
-      const icon = {
-        id: uid(),
-        name: this.uniqueName(name),
-        svg,
-        code: this.allocateCode(keepUnicode)
-      }
-      this.icons.push(icon)
-      this.persist()
-      return icon
+      return this.addIcons([{ name, svg, code: keepUnicode }]).added[0] || null
     },
 
     addIcons(items) {
       // items: [{ name, svg, code? }]
+      // 返回 { added, codeAlerts, overflow }：
+      //   added      新增图标数组
+      //   codeAlerts 「保持原 unicode」的码位落在保留区时的逐条提示
+      //   overflow   保留区已满提示（新图标顺延到保留区后）
+      const added = []
+      const codeAlerts = []
+      const before = reservedUsage(this.icons)
       for (const item of items) {
-        this.icons.push({
-          id: uid(),
-          name: this.uniqueName(item.name),
-          svg: item.svg,
-          code: item.code != null ? this.allocateCode(item.code) : this.allocateCode()
-        })
+        const keep = item.code
+        const code = keep != null
+          ? (() => {
+              const num = typeof keep === 'number' ? keep : parseInt(String(keep), 16)
+              const alert = this.reservedAlertForCode(num)
+              if (alert) codeAlerts.push(alert)
+              return this.allocateCode(keep)
+            })()
+          : this.allocateCode()
+        added.push({ id: uid(), name: this.uniqueName(item.name), svg: item.svg, code })
       }
+      this.icons.push(...added)
       this.persist()
+      const after = reservedUsage(this.icons)
+      let overflow = ''
+      if (before.free > 0 && after.free === 0) {
+        overflow = '⚠️ 本项目保留区（U+EE00–U+EFFF，512 个）已用满，新增图标将顺延到 U+F000 之后'
+      } else if (before.free === 0) {
+        // 导入前就已满：若本次新增了自动分配图标且其码位越过保留区
+        const beyond = added.some((i) => i.code > RESERVED_END && !items.some((it) => it.code != null))
+        if (beyond) overflow = '⚠️ 本项目保留区（U+EE00–U+EFFF）此前已满，本次新增图标已顺延到 U+F000 之后'
+      }
+      return { added, codeAlerts, overflow }
     },
 
     // 保证图标名唯一（重名加 _2、_3 后缀）
@@ -215,58 +243,43 @@ export const useProjectStore = defineStore('project', {
       return n
     },
 
-    clearAll() {
-      this.icons = []
-      this.persist()
-    },
-
-    resetAll() {
-      clearProject()
-      this.name = 'snfont'
-      this.icons = []
-      this.svgSize = 512
-      this.classPrefix = 'sn-'
-      this.fontName = 'snfont'
-      this.weight = 'regular'
-      this.nextCode = 0xe000
-    },
-
     // 导入项目备份：只追加图标，不覆盖当前项目名/字体名/前缀/字重/尺寸等配置，
     // 避免导入一个旧备份把当前项目设置意外改掉（"为什么带上了项目名称"问题）
     importProject(project) {
+      // 返回 { count, codeAlerts, overflow }（count 兼容旧用法=新增数量）
+      const codeAlerts = []
+      const before = reservedUsage(this.icons)
+      let count = 0
       if (project && Array.isArray(project.icons)) {
         const existed = new Set(this.icons.map((i) => i.name))
         const toAdd = []
         for (const i of project.icons) {
           const name = String(i.name || '').trim()
           if (!name) continue
-          // 与当前项目已有图标重名：跳过（保留现有），避免生成重复字形
-          if (existed.has(name)) continue
+          if (existed.has(name)) continue // 重名跳过
           existed.add(name)
-          toAdd.push({
-            id: uid(),
-            name,
-            svg: i.svg || '',
-            code: i.code != null ? this.allocateCode(i.code) : this.allocateCode()
-          })
+          let code
+          if (i.code != null) {
+            const num = typeof i.code === 'number' ? i.code : parseInt(String(i.code), 16)
+            const alert = this.reservedAlertForCode(num)
+            if (alert) codeAlerts.push(alert)
+            code = this.allocateCode(i.code)
+          } else {
+            code = this.allocateCode()
+          }
+          toAdd.push({ id: uid(), name, svg: i.svg || '', code })
         }
         this.icons.push(...toAdd)
         this.persist()
-        return toAdd.length
+        count = toAdd.length
       }
-      return 0
+      const after = reservedUsage(this.icons)
+      let overflow = ''
+      if (before.free > 0 && after.free === 0) {
+        overflow = '⚠️ 本项目保留区（U+EE00–U+EFFF，512 个）已用满，新增图标将顺延到 U+F000 之后'
+      }
+      return { count, codeAlerts, overflow }
     },
 
-    downloadJson() {
-      downloadProjectJson({
-        name: this.name,
-        icons: this.icons,
-        svgSize: this.svgSize,
-        classPrefix: this.classPrefix,
-        fontName: this.fontName,
-        weight: this.weight,
-        nextCode: this.nextCode
-      })
-    }
   }
 })
