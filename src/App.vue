@@ -8,12 +8,19 @@ import ImageToSvgModal from './components/ImageToSvgModal.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import DropdownMenu from './components/DropdownMenu.vue'
 import { exportSvgZip, exportProjectZip } from './lib/zip'
+import { flushPendingSnapshot } from './lib/persist'
 
 const store = useProjectStore()
 
 // 启动时自动修复旧版本解析出的异常 SVG
 const repairNotice = ref('')
-onMounted(() => {
+onMounted(async () => {
+  // 刷新/关闭前：IDB 异步写入可能未完成，同步把最新快照落 localStorage 兜底（防丢写）
+  const flush = () => flushPendingSnapshot()
+  window.addEventListener('pagehide', flush)
+  window.addEventListener('beforeunload', flush)
+  // 先从 IndexedDB 恢复完整项目（若 localStorage 快照被容量截断，IDB 里有全量数据）
+  await store.hydrateFromIdb()
   const n = store.repairAll()
   if (n > 0) {
     repairNotice.value = `已自动修复 ${n} 个异常图标（坐标越界）`

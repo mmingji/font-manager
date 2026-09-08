@@ -87,7 +87,7 @@ export const useProjectStore = defineStore('project', {
       // 仅当 IndexedDB 也写入失败（环境不支持/异常）时才提示；正常情况 IDB 容量充足不触发
       if (!ok && !this._saveWarned) {
         this._saveWarned = true
-        alert('⚠️ 数据保存失败（浏览器存储不可用），刷新后可能丢失。\n建议：及时「下载项目」保存备份。')
+        alert('⚠️ 数据保存失败（IndexedDB 不可用或写入被拒绝），刷新后可能丢失。\n请检查浏览器是否处于无痕/隐私模式或禁用了站点数据；\n建议：及时「下载项目」保存备份。')
       }
     },
 

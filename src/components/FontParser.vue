@@ -394,8 +394,9 @@ function miniSvg(svg) {
       <footer>
         <button @click="emit('close')">取消</button>
         <template v-if="parsed.length">
-          <button @click="importToProject" :disabled="!exportable.length || conflictIndices.size > 0" class="primary" :title="conflictIndices.size ? '存在冲突字形，请先使用上方的「自动分配」或「移除冲突」处理' : ''">导入项目 ({{ exportable.length }})</button>
           <button @click="downloadSvgs" :disabled="!exportable.length">下载 SVG (zip)</button>
+          <!-- 导入按钮放最右；有冲突时必须先在冲突条旁三选一（自动分配/移除冲突/覆盖旧图标） -->
+          <button @click="importToProject" :disabled="!exportable.length || (conflictIndices.size > 0 && !conflictMode)" class="primary" :title="conflictIndices.size && !conflictMode ? '存在冲突字形，请先选择处理方式：自动分配 / 移除冲突 / 覆盖旧图标' : ''">导入项目 ({{ exportable.length }})</button>
         </template>
       </footer>
     </div>
