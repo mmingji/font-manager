@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { loadProject, saveProject } from '../lib/persist.js'
+import { loadProject, saveProject, loadProjectFromIdb } from '../lib/persist.js'
 import { normalizeSvg } from '../lib/buildFont.js'
 import { groupKeyOf, pinyinFullKey } from '../lib/pinyin.js'
 import { isInReserved, isBaseAscii, reservedUsage, RESERVED_END } from '../lib/codepointPlan.js'
@@ -73,8 +73,9 @@ export const useProjectStore = defineStore('project', {
   },
 
   actions: {
-    persist() {
-      const ok = saveProject({
+    // 保存到 IndexedDB（主）+ localStorage（快照）；异步不阻塞操作
+    async persist() {
+      const ok = await saveProject({
         name: this.name,
         icons: this.icons,
         svgSize: this.svgSize,
@@ -83,11 +84,29 @@ export const useProjectStore = defineStore('project', {
         weight: this.weight,
         nextCode: this.nextCode
       })
-      // 保存失败（多为图标过多超出 localStorage 约 5MB 上限）时给一次可见提示；
-      // 只提示一次，避免每次操作都弹窗。图标仍在当前页面可用，但刷新会丢失
+      // 仅当 IndexedDB 也写入失败（环境不支持/异常）时才提示；正常情况 IDB 容量充足不触发
       if (!ok && !this._saveWarned) {
         this._saveWarned = true
-        alert('⚠️ 图标数据较多，超出浏览器本地存储上限，刷新后可能丢失。\n建议：及时「下载项目」保存备份，或删除部分图标。')
+        alert('⚠️ 数据保存失败（浏览器存储不可用），刷新后可能丢失。\n建议：及时「下载项目」保存备份。')
+      }
+    },
+
+    // 启动时从 IndexedDB 恢复（本地存储快照可能只到容量上限前的旧版本）
+    // 若 IDB 数据存在且图标数不少于当前（说明 LS 快照被截断过），用 IDB 覆盖
+    async hydrateFromIdb() {
+      const fromIdb = await loadProjectFromIdb()
+      if (!fromIdb || !Array.isArray(fromIdb.icons)) return
+      const lsCount = this.icons.length
+      const idbCount = fromIdb.icons.length
+      // 以较完整的一份为准：优先 IDB（可能含 LS 存不下的完整数据）
+      if (idbCount >= lsCount) {
+        this.name = fromIdb.name || this.name
+        this.icons = fromIdb.icons
+        this.svgSize = fromIdb.svgSize ?? this.svgSize
+        this.classPrefix = fromIdb.classPrefix || this.classPrefix
+        this.fontName = fromIdb.fontName || this.fontName
+        this.weight = fromIdb.weight || this.weight
+        this.nextCode = fromIdb.nextCode || this.nextCode
       }
     },
 
@@ -191,6 +210,52 @@ export const useProjectStore = defineStore('project', {
         if (beyond) overflow = '⚠️ 本项目保留区（U+EE00–U+EFFF）此前已满，本次新增图标已顺延到 U+F000 之后'
       }
       return { added, codeAlerts, overflow }
+    },
+
+    // 覆盖导入：与项目已有图标同码位时，保留旧名字、用新 svg 覆盖；未命中码位则正常新增
+    // 用于「覆盖旧图标」冲突处理；ASCII 码位命中时也允许覆盖（替换内置基础字形外观，由 buildFont 排除内置）
+    // 返回 { added, overwritten, codeAlerts, overflow }：
+    //   added=真正新增的图标；overwritten=[{ name, code }] 被覆盖的旧图标
+    overwriteByCode(items) {
+      const added = []
+      const overwritten = []
+      const codeAlerts = []
+      const before = reservedUsage(this.icons)
+      for (const item of items) {
+        const num = item.code != null && typeof item.code !== 'number' ? parseInt(String(item.code), 16) : item.code
+        if (num == null || isNaN(num)) {
+          // 无码位：走自动分配新增
+          added.push({ id: uid(), name: this.uniqueName(item.name), svg: item.svg, code: this.allocateCode() })
+          continue
+        }
+        // 命中已有同码位图标 → 覆盖（保留旧名字 + 新 svg；码位不变）
+        const existIdx = this.icons.findIndex((ic) => ic.code === num)
+        if (existIdx >= 0) {
+          const old = this.icons[existIdx]
+          this.icons[existIdx] = { ...old, svg: item.svg }
+          overwritten.push({ name: old.name, code: num })
+          continue
+        }
+        // 未命中：若与内置 ASCII 冲突则是「覆盖内置」，图标本身新增（码位保留在 ASCII）
+        if (isBaseAscii(num)) {
+          const alert = this.reservedAlertForCode(num)
+          if (alert) codeAlerts.push(alert)
+          added.push({ id: uid(), name: this.uniqueName(item.name), svg: item.svg, code: num })
+          continue
+        }
+        // 普通未占用码位：检查保留区占用后新增
+        const alert = this.reservedAlertForCode(num)
+        if (alert) codeAlerts.push(alert)
+        added.push({ id: uid(), name: this.uniqueName(item.name), svg: item.svg, code: num })
+      }
+      this.icons.push(...added)
+      this.persist()
+      const after = reservedUsage(this.icons)
+      let overflow = ''
+      if (before.free > 0 && after.free === 0) {
+        overflow = '⚠️ 本项目保留区（U+EE00–U+EFFF，512 个）已用满，新增图标将顺延到 U+F000 之后'
+      }
+      return { added, overwritten, codeAlerts, overflow }
     },
 
     // 保证图标名唯一（重名加 _2、_3 后缀）

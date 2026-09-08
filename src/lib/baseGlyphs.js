@@ -14,7 +14,9 @@ export function getBaseGlyphData(weight = 'regular') {
 
 // 构建 SVG font 的 <glyph> 片段
 // 返回 { xml, map, adv }：xml=字形xml；map=字符→glyph序号；adv=字符→advanceWidth
-export function buildBaseGlyphXml(weight = 'regular') {
+// skipCodes: 需要跳过（不生成）的码位集合 —— 当用户导入的图标覆盖了内置基础字形
+//（ASCII 覆盖）时由 buildTtfFont 传入，被覆盖的字符改由图标字形提供，避免重复码位
+export function buildBaseGlyphXml(weight = 'regular', skipCodes = null) {
   const { paths, adv } = getBaseGlyphData(weight)
   // 空格(0x20)不在提取的 94 字符内，但安装字体后输入英文需要空格能正常占位，
   // 这里补一个空轮廓、带正常步进宽度(280，取自源字体 space)的空格字形，放在首位
@@ -24,6 +26,7 @@ export function buildBaseGlyphXml(weight = 'regular') {
   const map = {}
   entries.forEach(([ch, d], i) => {
     const code = ch.charCodeAt(0)
+    if (skipCodes && skipCodes.has(code)) return // 被用户字形覆盖的码位不再内置
     const w = ch === ' ' ? 280 : adv[ch]
     xml.push(`<glyph glyph-name="latin-${i}" unicode="&#x${code.toString(16)};" horiz-adv-x="${w}" d="${d}"/>`)
     map[ch] = i + 1

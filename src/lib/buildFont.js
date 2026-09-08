@@ -90,7 +90,12 @@ export function buildTtfFont(icons, familyName = 'snfont', weight = 'regular') {
   const mapping = [] // { name, code }
 
   // 1. 内置基础字形（连字触发字符：字母/数字/符号，按所选字重取形：regular→常规 / bold→粗体）
-  const base = buildBaseGlyphXml(weight)
+  // 用户导入的图标若占用了 ASCII 码位（覆盖内置基础字形），这些码位跳过内置，避免重复 unicode
+  const asciiOverrides = new Set()
+  for (const icon of icons) {
+    if (icon.code != null && icon.code >= 0x20 && icon.code <= 0x7e) asciiOverrides.add(icon.code)
+  }
+  const base = buildBaseGlyphXml(weight, asciiOverrides.size ? asciiOverrides : null)
   const glyphsXml = [base.xml]
 
   // 2. 图标字形

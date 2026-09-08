@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { parseFontFile, isFontFile } from '../lib/parseFont'
 import { exportSvgZip } from '../lib/zip'
 import { useProjectStore } from '../store/project'
@@ -22,6 +22,9 @@ const customSize = ref('')
 const selected = ref(new Set())
 // ASCII 基础区(0x20-0x7E)冲突字形下标集合：与内置字母/数字/符号同码位，保持原码位会导致字体构建报错
 const conflictIndices = ref(new Set())
+// 冲突处理模式：''（未选） | 'auto'（自动分配） | 'remove'（移除冲突） | 'overwrite'（覆盖旧图标）
+// 有冲突时必须三选一才能导入；默认都不选
+const conflictMode = ref('')
 // #7：保持原字体 unicode 码（#8：默认选中）
 const keepUnicode = ref(true)
 // #8：unicode→名称映射
@@ -93,10 +96,12 @@ async function handleFiles(files) {
       const usedCodes = new Set(store.icons.map((ic) => ic.code))
       icons.forEach((it, i) => {
         if (it.unicode == null) return
+        // 冲突 = 与内置基础字符同码位(ASCII 0x20-0x7E) ∪ 与项目已有图标占用码位相同
         if (isBaseAscii(it.unicode) || usedCodes.has(it.unicode)) conf.add(i)
       })
     }
     conflictIndices.value = conf
+    conflictMode.value = '' // 重解析后重置冲突处理选择
   } catch (e) {
     // #6：解析失败原因回显
     error.value = '解析失败：' + (e?.message || e)
@@ -119,6 +124,16 @@ function toggleAll() {
     : new Set(parsed.value.map((_, i) => i))
 }
 
+
+// 监听冲突模式：选「移除冲突」立即取消全部冲突字形勾选（卡片同时禁用不可点）
+watch(conflictMode, (mode) => {
+  if (mode === 'remove' && conflictIndices.value.size) {
+    const next = new Set(selected.value)
+    for (const i of conflictIndices.value) next.delete(i)
+    selected.value = next
+  }
+})
+
 const exportable = computed(() =>
   parsed.value.filter((_, i) => selected.value.has(i))
 )
@@ -128,31 +143,106 @@ async function downloadSvgs() {
   await exportSvgZip(icons, size.value, `${store.fontName}-svgs.zip`)
 }
 
+// 底部「导入项目」：按冲突处理模式分发
+// - 无冲突：直接导入全部选中项
+// - auto：冲突字形码位改为自动分配后导入（只针对已勾选冲突项）
+// - remove：移除全部冲突字形（冲突项自动取消勾选），导入其余
+// - overwrite：已勾选冲突字形覆盖同码位旧图标/内置基础字形，未勾选冲突项不导入
 function importToProject() {
-  // 底部「导入项目」：导入全部选中项；ASCII 冲突项由 store 内建保护自动改分配码位
-  doImport(null)
+  if (!conflictIndices.value.size) {
+    doImport(null)                 // 无冲突：全部选中项
+    return
+  }
+  switch (conflictMode.value) {
+    case 'auto':
+      doAutoAssign()
+      break
+    case 'remove':
+      doRemoveConflicts()
+      break
+    case 'overwrite':
+      doOverwrite()
+      break
+    default:
+      // 不应发生：按钮在未选模式时已禁用
+      return
+  }
 }
 
-// 预览区冲突操作 ①：冲突字形自动分配码位 → 全部选中项正常导入（store 内对 ASCII 命中自动分配）
-function assignConflictAuto() {
-  doImport(null)
+// ① 自动分配：已勾选的冲突字形去掉原码位（走 store 自动分配），其余选中项照常导入
+function doAutoAssign() {
+  const items = exportable.value.map((p) => {
+    const isConflict = conflictIndices.value.has(parsed.value.indexOf(p))
+    return {
+      name: p.name,
+      svg: p.svg,
+      // 冲突项不传码位 → store 自动分配；非冲突项仍保持原码位
+      code: keepUnicode.value && !isConflict && p.unicode != null ? p.unicode : null
+    }
+  })
+  commitImport(items)
 }
 
-// 预览区冲突操作 ②：剔除冲突字形后导入其余选中项
-function removeConflictItems() {
-  // 收集「选中且非冲突」的 exportable 序号：exportable 与 parsed 同序过滤，逐项对照
+// ② 移除冲突：取消全部冲突字形勾选（卡片在 remove 模式下禁用不可点），只导入其余选中项
+function doRemoveConflicts() {
   const keepIdx = []
   let exp = 0
   for (let i = 0; i < parsed.value.length; i++) {
-    if (!selected.value.has(i)) continue
-    if (!conflictIndices.value.has(i)) keepIdx.push(exp)
+    if (conflictIndices.value.has(i)) {
+      // 取消该冲突项勾选
+      selected.value = new Set([...selected.value].filter((x) => x !== i))
+      continue
+    }
+    if (selected.value.has(i)) keepIdx.push(exp)
     exp++
   }
-  doImport(new Set(keepIdx))
+  const items = exportable.value.filter((_, k) => keepIdx.includes(k)).map((p) => ({
+    name: p.name,
+    svg: p.svg,
+    code: keepUnicode.value && p.unicode != null ? p.unicode : null
+  }))
+  commitImport(items)
 }
 
-// 统一导入入口：indices=null 表示导入全部 exportable；indices=Set 表示仅导入集合内序号
-// ASCII 基础区命中由 store.addIcons 内建保护自动改分配，导入不会因重复码位失败
+// ③ 覆盖旧图标：冲突项（已勾选）用同码位覆盖项目旧图标/替换内置基础字形，
+// 未勾选的冲突项不导入；非冲突项照常导入
+function doOverwrite() {
+  const conflictItems = []
+  const normalItems = []
+  for (const p of exportable.value) {
+    const isConflict = conflictIndices.value.has(parsed.value.indexOf(p))
+    const item = {
+      name: p.name,
+      svg: p.svg,
+      code: keepUnicode.value && p.unicode != null ? p.unicode : null
+    }
+    if (isConflict) conflictItems.push(item)
+    else normalItems.push(item)
+  }
+  if (conflictItems.length) {
+    const res = store.overwriteByCode(conflictItems)
+    if (res.overflow) alert(res.overflow)
+  }
+  if (normalItems.length) {
+    const res = store.addIcons(normalItems)
+    if (res.overflow) alert(res.overflow)
+  }
+  emit('close')
+}
+
+// 统一导入：items 为 [{ name, svg, code }]，按 keepUnicode 生成后入库
+function commitImport(items) {
+  if (!items.length) {
+    alert('没有可导入的图标')
+    emit('close')
+    return
+  }
+  const res = store.addIcons(items)
+  if (res.overflow) alert(res.overflow)
+  emit('close')
+}
+
+// [兼容旧调用] 保留 doImport 供其它入口使用（无冲突时导入全部选中）
 function doImport(indices) {
   const src = indices == null
     ? exportable.value
@@ -165,12 +255,9 @@ function doImport(indices) {
   const items = src.map((p) => ({
     name: p.name,
     svg: p.svg,
-    // #7：保持原 unicode 时传 unicode 码，否则 null 走稳定分配；
-    // ASCII 基础区命中由 store.addIcons 内建保护强制改自动分配，无需在此特殊处理
     code: keepUnicode.value && p.unicode != null ? p.unicode : null
   }))
-  // 保留区未占用时不冲突，正常导入；已占用码位已在预览区冲突条标红并提供处理
-const res = store.addIcons(items)
+  const res = store.addIcons(items)
   if (res.overflow) alert(res.overflow)
   emit('close')
 }
@@ -278,10 +365,11 @@ function miniSvg(svg) {
               <span class="conflict-info">
                 <span class="conflict-dot">⚠</span>
                 检测到 {{ conflictIndices.size }} 个冲突字符
-                <span class="conflict-tip">这些字形与内置基础拉丁字符（ASCII 0x20–0x7E，字母/数字/符号区）使用相同码位。该区字形已内置用于正常输入字母与 GSUB 连字触发；若保留原码位，生成字体时会发生重复码位错误而失败。选择下方处理方式：</span>
+                <span class="conflict-tip">这些字形与内置基础拉丁字符或项目已有图标占用相同码位。若保留原码位，生成字体时会发生重复码位错误而失败。请选择处理方式：</span>
               </span>
-              <button class="mini-btn" @click="assignConflictAuto" title="冲突字形保留导入，码位改为自动分配（U+EE00+ 保留区，与内置字母互不干扰）">自动分配</button>
-              <button class="mini-btn danger" @click="removeConflictItems" title="丢弃这些与内置字母冲突的字形，仅导入其余字形">移除冲突</button>
+              <label class="mini-radio"><input type="radio" name="conflict-mode" value="auto" v-model="conflictMode" /> 自动分配</label>
+              <label class="mini-radio"><input type="radio" name="conflict-mode" value="remove" v-model="conflictMode" /> 移除冲突</label>
+              <label class="mini-radio"><input type="radio" name="conflict-mode" value="overwrite" v-model="conflictMode" /> 覆盖旧图标</label>
             </span>
           </div>
           <div class="icon-list">
@@ -289,10 +377,10 @@ function miniSvg(svg) {
               v-for="(item, i) in parsed"
               :key="item.name + i"
               class="icon-item"
-              :class="{ on: selected.has(i), conflict: conflictIndices.has(i) }"
+              :class="{ on: selected.has(i), conflict: conflictIndices.has(i), disabled: conflictMode === 'remove' && conflictIndices.has(i) }"
               @click="toggleSelect(i)"
             >
-              <input type="checkbox" :checked="selected.has(i)" @change="toggleSelect(i)" @click.stop />
+              <input type="checkbox" :checked="selected.has(i)" :disabled="conflictMode === 'remove' && conflictIndices.has(i)" @change="toggleSelect(i)" @click.stop />
               <div class="mini" v-html="miniSvg(item.svg)"></div>
               <span class="iname" :title="conflictIndices.has(i) ? '码位冲突：与内置基础字符/项目已占用码位相同' : item.name">{{ item.name }}</span>
               <span class="icode" v-if="item.unicode != null">{{ item.unicode.toString(16).toUpperCase().padStart(4, '0') }}</span>
@@ -659,5 +747,35 @@ footer {
   gap: 8px;
   padding: 14px 20px;
   border-top: 1px solid var(--border);
+}
+
+/* 冲突处理单选（radio） */
+.mini-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  padding: 2px 4px;
+}
+.mini-radio input {
+  margin: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+/* remove 模式：冲突卡片禁用（不可点、视觉置灰） */
+.icon-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.icon-item.disabled .mini,
+.icon-item.disabled .iname,
+.icon-item.disabled .icode {
+  pointer-events: none;
+}
+.icon-item.disabled input {
+  cursor: not-allowed;
 }
 </style>
