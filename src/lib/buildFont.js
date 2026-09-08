@@ -1,103 +1,12 @@
-// 图标项目 → snfont 字体（ttf/woff/woff2）+ snfont.css
-// 码位分配在 PUA 区域（U+E000 起），name 表写入图标名，实现"输入图标名显示图标"
-// 支持 GSUB 连字：输入图标名（如 trash）自动替换为图标字形
-import opentype from 'opentype.js'
+// 图标项目 → 字体产物（ttf/woff/woff2 + css，文件名/字体族由调用方传入 fontName）
+// 码位分配在 PUA 保留区（U+EE00–U+EFFF 512 个，避开参考映射已占用的 E000–E8CC / F000+），name 表写入图标名
+// GSUB 连字：输入图标名（如 trash）自动替换为图标字形
 import fonteditor from 'fonteditor-core'
-import { normalizeSvgImport, parsePathCommands, pathBBox, commandsToPathData, arcToCubic } from './svgNormalize.js'
+import { normalizeSvgImport, parsePathCommands, pathBBox, commandsToPathData } from './svgNormalize.js'
 import { buildBaseGlyphXml } from './baseGlyphs.js'
 import { buildGsubTable, injectGsub } from './gsub.js'
 
-export const PUA_START = 0xe000
-
-// SVG path 数据解析 → opentype.Path（支持完整命令：M/L/H/V/C/S/Q/T/A/Z，含相对坐标）
-export function svgPathToOpentypePath(d) {
-  const path = new opentype.Path()
-  // 先用 svgNormalize 解析成绝对命令，再转 opentype path（保证与 bbox 计算一致）
-  const cmds = parsePathCommands(d)
-  let cx = 0, cy = 0, sx = 0, sy = 0
-  let prevC1x = 0, prevC1y = 0, prevIsC = false
-  let prevQx = 0, prevQy = 0, prevIsQ = false
-
-  const X = (v) => +v
-  const Y = (v) => +v
-  for (const { type, raw, args } of cmds) {
-    const rel = raw !== type
-    const A = (i) => (rel ? cx + args[i] : args[i])
-    const B = (i) => (rel ? cy + args[i] : args[i])
-    switch (type) {
-      case 'M':
-        cx = A(0); cy = B(1); sx = cx; sy = cy
-        path.moveTo(X(cx), Y(cy))
-        prevIsC = prevIsQ = false
-        break
-      case 'L':
-        cx = A(0); cy = B(1)
-        path.lineTo(X(cx), Y(cy))
-        prevIsC = prevIsQ = false
-        break
-      case 'H':
-        cx = rel ? cx + args[0] : args[0]
-        path.lineTo(X(cx), Y(cy))
-        prevIsC = prevIsQ = false
-        break
-      case 'V':
-        cy = rel ? cy + args[0] : args[0]
-        path.lineTo(X(cx), Y(cy))
-        prevIsC = prevIsQ = false
-        break
-      case 'C':
-        path.curveTo(A(0), B(1), A(2), B(3), A(4), B(5))
-        // 先记录本段控制2(供 S 镜像)，再更新当前点，避免用终点坐标算镜像导致曲线变形
-        prevC1x = A(2); prevC1y = B(3); prevIsC = true; prevIsQ = false
-        cx = A(4); cy = B(5)
-        break
-      case 'S':
-        {
-          let c1x, c1y
-          if (prevIsC) { c1x = 2 * cx - prevC1x; c1y = 2 * cy - prevC1y }
-          else { c1x = cx; c1y = cy }
-          path.curveTo(c1x, c1y, A(0), B(1), A(2), B(3))
-          // 先记录本段控制2(供下一个 S 镜像)，再更新当前点——顺序颠倒会让镜像用终点坐标导致变形
-          prevC1x = A(0); prevC1y = B(1); prevIsC = true; prevIsQ = false
-          cx = A(2); cy = B(3)
-        }
-        break
-      case 'Q':
-        path.quadTo(A(0), B(1), A(2), B(3))
-        cx = A(2); cy = B(3)
-        prevQx = A(0); prevQy = B(1); prevIsQ = true; prevIsC = false
-        break
-      case 'T':
-        {
-          let qx, qy
-          if (prevIsQ) { qx = 2 * cx - prevQx; qy = 2 * cy - prevQy }
-          else { qx = cx; qy = cy }
-          path.quadTo(qx, qy, A(0), B(1))
-          cx = A(0); cy = B(1)
-          prevQx = qx; prevQy = qy; prevIsQ = true; prevIsC = false
-        }
-        break
-      case 'A':
-        {
-          const x1 = cx, y1 = cy
-          const x2 = A(5), y2 = B(6)
-          const curves = arcToCubic(x1, y1, args[0], args[1], args[2], args[3], args[4], x2, y2)
-          for (const c of curves) {
-            path.curveTo(c[0], c[1], c[2], c[3], c[4], c[5])
-          }
-          cx = x2; cy = y2
-          prevIsC = prevIsQ = false
-        }
-        break
-      case 'Z':
-        path.close()
-        cx = sx; cy = sy
-        prevIsC = prevIsQ = false
-        break
-    }
-  }
-  return path
-}
+export const PUA_START = 0xee00
 
 // 从 SVG 字符串提取 path 数据（要求 d= 前不是字母，避免误匹配 id=）
 export function extractPathData(svg) {
@@ -250,7 +159,7 @@ ${glyphsXml.join('\n')}
   //    这里全部改为字体名：fullName=字体名（标题），fontSubFamily=Regular/Bold
   ttfObj.name.fontFamily = familyName
   ttfObj.name.fontSubFamily = weight === 'bold' ? 'Bold' : 'Regular'
-  ttfObj.name.uniqueSubFamily = `SnFont : ${familyName}`
+  ttfObj.name.uniqueSubFamily = `${familyName} ${weight === 'bold' ? 'Bold' : 'Regular'}`
   ttfObj.name.fullName = familyName
   ttfObj.name.version = 'Version 1.0'
   ttfObj.name.postScriptName = familyName

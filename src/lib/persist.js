@@ -1,4 +1,4 @@
-// 项目数据持久化：localStorage 读写 + 项目 JSON 导出/导入
+// 项目数据持久化：localStorage 读写（项目 JSON 的下载/导入分别由 zip.js 与 ImportModal 负责）
 
 const STORAGE_KEY = 'snfont.project.v1'
 
@@ -25,25 +25,4 @@ export function saveProject(project) {
     console.error('保存项目失败（可能超出 localStorage 容量）', e)
     return false
   }
-}
-
-export function clearProject() {
-  try {
-    localStorage.removeItem(STORAGE_KEY)
-  } catch {
-    /* ignore */
-  }
-}
-
-// 下载项目为 json 文件
-export function downloadProjectJson(project) {
-  const blob = new Blob([JSON.stringify(project, null, 2)], {
-    type: 'application/json;charset=utf-8'
-  })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'snfont-project.json'
-  a.click()
-  URL.revokeObjectURL(url)
 }

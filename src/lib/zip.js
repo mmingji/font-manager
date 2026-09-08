@@ -30,10 +30,10 @@ export async function exportSvgZip(icons, size, zipName = 'svgs.zip') {
   downloadBlob(blob, zipName)
 }
 
-// 导出完整项目包：snfont.ttf/woff/woff2 + snfont.css + demo.html + snfont-project.json
+// 导出完整项目包：<字体名>.ttf/woff/woff2 + <字体名>.css + demo.html + <项目名>.project.json（文件名跟随项目/字体名）
 // withSvg 控制是否附带 svgs 文件夹（默认不附带，减小体积）
 // project: { name, fontName, classPrefix, weight, icons, svgSize }
-// 下载包内所有文件放在 zip 根目录下以产物字体名命名的文件夹里（如 snfont-regular/ 或 snfont-bold/），避免散落根目录
+// 下载包内所有文件放在 zip 根目录下以产物字体名命名的文件夹里（如 <字体名>-regular/ 或 <字体名>-bold/），避免散落根目录
 export async function exportProjectZip(project, size, withSvg = false) {
   const fontName = project.fontName || 'snfont'
   const classPrefix = project.classPrefix || 'sn-'
@@ -41,7 +41,7 @@ export async function exportProjectZip(project, size, withSvg = false) {
   const { ttf, woff, woff2, css, mapping, fullName } = await buildFontFiles(project.icons, fontName, classPrefix, weight)
 
   const zip = new JSZip()
-  // 内建产物文件夹：<fullName>/（常规 snfont-regular/，粗体 snfont-bold/）
+  // 内建产物文件夹：<fullName>/（常规 <字体名>-regular/，粗体 <字体名>-bold/）
   const root = zip.folder(fullName)
   const name = fullName
   const cssName = `${name}.css`
@@ -61,31 +61,22 @@ export async function exportProjectZip(project, size, withSvg = false) {
   root.file(`${name}.woff`, woff)
   root.file(`${name}.woff2`, woff2)
   root.file(cssName, css)
-  root.file('demo.html', buildDemoHtml({ ...project, weight }, mapping, cssName, ttf, classPrefix, fullName))
-  root.file('snfont-project.json', JSON.stringify({ ...project, weight }, null, 2))
+  root.file('demo.html', buildDemoHtml({ ...project, weight }, mapping, cssName, classPrefix, fullName))
+  const projectJsonName = (project.name || 'project').trim().replace(/[\\/:*?"<>|]/g, '_')
+  root.file(projectJsonName + '.project.json', JSON.stringify({ ...project, weight }, null, 2))
 
   const blob = await zip.generateAsync({ type: 'blob' })
   downloadBlob(blob, `${fullName}-project.zip`)
 }
 
-// base64 编码 ArrayBuffer
-function bufferToBase64(buffer) {
-  const bytes = new Uint8Array(buffer)
-  let binary = ''
-  const chunk = 0x8000
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk))
-  }
-  return btoa(binary)
-}
 // 生成本地预览页 demo.html
-// #16：图标用纯字体渲染（<i class="sn-xxx">），不用内嵌 SVG，PS 里可直接复制
+// #16：图标用纯字体渲染（<i class="{prefix}xxx">，prefix 由参数传入），不内嵌 SVG，PS 里可直接复制
 // #17：按首字母分组 + 搜索
 // #18：@font-face 用 src 相对引用（不内联字体）
 // #19：点击名称/unicode/类名复制 + Toast
 // #3：页面顶部显示当前字重；布局撑满视口、右侧字母导航垂直居中并加粗
-// 标题跟随项目名：默认项目名 snfont 显示为 SnFont，自定义名原样显示
-export function buildDemoHtml(project, mapping, cssName, ttfBuffer, classPrefix = 'sn-', fontFamilyArg) {
+// 标题跟随项目名：默认项目名按缺省样式显示，自定义名原样显示
+export function buildDemoHtml(project, mapping, cssName, classPrefix = 'sn-', fontFamilyArg) {
   const icons = project.icons
   const weight = project.weight || 'regular'
   const weightLabel = weight === 'bold' ? 'Bold 粗体' : 'Regular 常规'

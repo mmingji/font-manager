@@ -1,9 +1,9 @@
 // 验证：完整命令支持（S/H/V/T/A 等）不再丢命令导致变形
 import { parsePathCommands, pathBBox, commandsToPathData } from '../src/lib/svgNormalize.js'
-import { svgPathToOpentypePath } from '../src/lib/buildFont.js'
+import { normalizePathData } from '../src/lib/buildFont.js'
 
 // 构造一个含 S/H/V/A 命令的典型 Illustrator SVG path
-// 这是 FontAwesome 类图标常见的 path 结构
+// 这是参考图标集常见的 path 结构
 const d = 'M512 128c-70.7 0-128 57.3-128 128h64c0-35.3 28.7-64 64-64v-64zM384 384h64v-64h-64v64zM512 0C229.2 0 0 229.2 0 512v256h128V512c0-212.1 171.9-384 384-384s384 171.9 384 384v256h128V512C1024 229.2 794.8 0 512 0z'
 
 const cmds = parsePathCommands(d)
@@ -22,9 +22,9 @@ const offsetY = (1000 - h * scale) / 2 - bb.minY * scale
 const newD = commandsToPathData(cmds, scale, offsetX, offsetY)
 console.log('归一化后 path 前 120:', newD.slice(0, 120))
 
-// 用 opentype 解析验证
-const path = svgPathToOpentypePath(newD)
-console.log('opentype path commands:', path.commands.length)
+// 归一化整体校验（normalizePathData：坐标归一到 0~1000 + 完整命令保留）
+const normalized = normalizePathData(newD)
+console.log('normalizePathData 产出行数长度:', normalized.length)
 
 // 检查归一化后坐标范围
 const cmds2 = parsePathCommands(newD)
