@@ -225,13 +225,20 @@ header h3 {
 }
 
 .close {
-  border: none;
+  border: 1px solid transparent; /* 默认无边框（透明边框占位，hover 变实色不位移） */
   background: transparent;
-  font-size: 22px;
   color: var(--text-2);
-  padding: 0 6px;
+  padding: 3px 8px;
+  border-radius: 2px; /* hover 出现边框时的圆角 */
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  cursor: pointer;
 }
-
+.close:hover {
+  border-color: var(--border);
+  color: var(--text);
+}
 .body {
   padding: 20px;
 }

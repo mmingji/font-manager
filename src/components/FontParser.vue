@@ -17,6 +17,18 @@ const parsing = ref(false)
 const error = ref('')
 const warning = ref('')
 const parsed = ref([]) // { name, svg, unicode, advanceWidth }
+// 当前大预览字形下标（点击卡片切换；-1/越界时回退到第一项）
+const currentIdx = ref(-1)
+const currentItem = computed(() => {
+  if (!parsed.value.length) return null
+  const idx = currentIdx.value >= 0 && currentIdx.value < parsed.value.length ? currentIdx.value : 0
+  return parsed.value[idx]
+})
+// 大预览角标取解析产物 svg 的 width（解析设置里选的尺寸，如 512/1024/custom）
+function svgWidth(svg) {
+  const m = String(svg).match(/width="([^"]+)"/)
+  return m ? m[1] : '—'
+}
 const size = ref(512)
 const customSize = ref('')
 const selected = ref(new Set())
@@ -365,6 +377,14 @@ function miniSvg(svg) {
         <p v-if="error" class="error">{{ error }}</p>
 
         <template v-if="parsed.length">
+          <!-- 大预览：按解析设置的 SVG 尺寸渲染当前字形（点击下方卡片切换） -->
+          <div class="hero" v-if="currentItem">
+            <div class="hero-head">
+              <span class="hero-name">{{ currentItem.name }}</span>
+              <span class="hero-note">按解析设置的 SVG 尺寸（{{ svgWidth(currentItem.svg) }}px）预览</span>
+            </div>
+            <div class="hero-svg-box" v-html="currentItem.svg"></div>
+          </div>
           <div class="preview-head">
             <label><input type="checkbox" :checked="selected.size === parsed.length && parsed.length > 0" @change="toggleAll" /> 全选</label>
             <span>{{ selected.size }} / {{ parsed.length }}</span>
@@ -391,8 +411,9 @@ function miniSvg(svg) {
               v-for="(item, i) in parsed"
               :key="item.name + i"
               class="icon-item"
-              :class="{ on: selected.has(i), conflict: conflictIndices.has(i), disabled: conflictMode === 'remove' && conflictIndices.has(i) }"
-              @click="toggleSelect(i)"
+              :class="{ on: selected.has(i), conflict: conflictIndices.has(i), disabled: conflictMode === 'remove' && conflictIndices.has(i), current: parsed[currentIdx] === item || (currentIdx < 0 && i === 0) }"
+              @click="currentIdx = i"
+              :title="'点击查看大预览（' + item.name + '）'"
             >
               <input type="checkbox" :checked="selected.has(i)" :disabled="conflictMode === 'remove' && conflictIndices.has(i)" @change="toggleSelect(i)" @click.stop />
               <div class="mini" v-html="miniSvg(item.svg)"></div>
@@ -452,11 +473,19 @@ header h3 {
 }
 
 .close {
-  border: none;
+  border: 1px solid transparent; /* 默认无边框（透明边框占位，hover 变实色不位移） */
   background: transparent;
-  font-size: 22px;
   color: var(--text-2);
-  padding: 0 6px;
+  padding: 3px 8px;
+  border-radius: 2px; /* hover 出现边框时的圆角 */
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  cursor: pointer;
+}
+.close:hover {
+  border-color: var(--border);
+  color: var(--text);
 }
 
 .body {
@@ -608,6 +637,55 @@ header h3 {
   margin: 10px 0 0;
 }
 
+/* 大预览：按解析设置的 SVG 尺寸渲染，容器内等比压缩显示 */
+.hero {
+  margin: 14px 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: #fff;
+}
+
+.hero-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.hero-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hero-note {
+  font-size: 12px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.hero-svg-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  max-height: 340px;
+  overflow: hidden;
+}
+
+.hero-svg-box :deep(svg) {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 320px;
+  color: #333;
+}
+
 .preview-head {
   display: flex;
   justify-content: space-between;
@@ -644,6 +722,11 @@ header h3 {
   position: relative;
 }
 
+
+/* current = 大预览正在显示的字形：加粗外描边（强于勾选边框），与勾选(on)区分 */
+.icon-item.current {
+  box-shadow: 0 0 0 3px var(--primary);
+}
 
 /* 冲突字形（与内置基础字符或项目已占用码位相同）：标红提示 */
 .icon-item.conflict {
