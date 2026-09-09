@@ -1,5 +1,10 @@
 // 字体文件解析：将 ttf/otf/woff/woff2 解析为统一尺寸的 SVG 文件
-import opentype from 'opentype.js'
+// 引擎选型（重要）：opentype.js 解析 CFF/OTF 字体的紧凑曲线编码（vv/hv/vh/hvcurveto）
+// 存在控制点错位 bug——实测 Font Awesome 7 Pro 的细线圆环（内外圆半径比 72/56）
+// 被解析成粗环（500/333），"只有单圆圈/单线条图标粗细大小不对"即此因（2026-09 排查实锤）。
+// fontkit（2.x，浏览器官方构建）对 CFF/TrueType 均正确，改为 fontkit 取轮廓。
+// 流程：woff2 → fonteditor wasm decode 成 ttf（无损，已验证）→ fontkit 解析
+import { create as fontkitCreate } from './fontkit-bundle.mjs'
 import fonteditor from 'fonteditor-core'
 
 const FONT_EXT = ['ttf', 'otf', 'woff', 'woff2']
@@ -24,7 +29,7 @@ function ensureWoff2() {
   return woff2Ready
 }
 
-// 将 buffer 规范化为 opentype 可解析的 ttf/otf buffer
+// 将 buffer 规范化为 fontkit 可解析的 ttf/otf buffer（woff2 先经 wasm 无损解码）
 async function toParseableBuffer(buffer) {
   if (isWoff2Buffer(buffer)) {
     await ensureWoff2()
@@ -40,12 +45,27 @@ function escapeXml(s) {
   })
 }
 
-// 将字形 path 命令序列转换为 svg path 数据（归一化到 0~1000 的 viewBox 内）
-function glyphToPathData(glyph) {
-  const cmds = glyph.getPath(0, 0, 1000).commands
+// fontkit Path 命令 → 通用命令序列（y 翻转：字体内部坐标 y 向上 → SVG y 向下）
+function fontkitPathToCommands(pathCmd) {
+  const out = []
+  for (const c of pathCmd.commands) {
+    switch (c.command) {
+      case 'moveTo': out.push({ type: 'M', x: c.args[0], y: -c.args[1] }); break
+      case 'lineTo': out.push({ type: 'L', x: c.args[0], y: -c.args[1] }); break
+      case 'bezierCurveTo': out.push({ type: 'C', x1: c.args[0], y1: -c.args[1], x2: c.args[2], y2: -c.args[3], x: c.args[4], y: -c.args[5] }); break
+      case 'quadraticCurveTo': out.push({ type: 'Q', x1: c.args[0], y1: -c.args[1], x: c.args[2], y: -c.args[3] }); break
+      case 'closePath': out.push({ type: 'Z' }); break
+      default: break
+    }
+  }
+  return out
+}
+
+// 将命令序列转换为 svg path 数据（归一化到 0~1000 的 viewBox 内）
+function glyphToPathData(cmds) {
   if (!cmds.length) return ''
 
-  // 第一遍：计算所有点的 bbox（getPath 输出 y 已翻转，y 向下）
+  // 第一遍：计算所有点的 bbox（命令坐标已 y 翻转，y 向下）
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
   const collect = (x, y) => {
     if (x < minX) minX = x
@@ -93,32 +113,37 @@ function glyphToPathData(glyph) {
 }
 
 // 解析字体文件为 { name, svg } 列表
-// size: SVG 边长（输出 viewBox 与 width/height 一致）
+// size: SVG 边长（输出 viewBox 1000 系，width/height=size）
 export async function parseFontFile(file, size = 512) {
   const raw = await file.arrayBuffer()
   const buffer = await toParseableBuffer(raw)
-  const font = opentype.parse(buffer)
+  // fontkit：ttf/otf 均支持；CFF 轮廓提取正确（opentype.js 的 bug 见文件头注释）
+  const font = fontkitCreate(new Uint8Array(buffer))
 
   const result = []
   const seenNames = new Set()
 
-  for (let i = 0; i < font.glyphs.length; i++) {
-    const glyph = font.glyphs.get(i)
-    // 跳过 .notdef 等系统字形
-    if (glyph.name === '.notdef' || glyph.name === '.null' || glyph.name === 'nonmarkingreturn') continue
+  // fontkit 无按 glyph 索引遍历的公开 API，用 characterSet（码位列表）反查，
+  // 按 glyph id 排序输出，保持与"字形序"一致的稳定顺序；无 unicode 的字形不导出
+  //（woff2 制作时通常已剔除；与 opentype 的差异仅为极少数无码位字形）
+  const byGlyph = new Map() // glyphId → 首个码位
+  for (const cp of font.characterSet) {
+    const g = font.glyphForCodePoint(cp)
+    if (g && !byGlyph.has(g.id)) byGlyph.set(g.id, cp)
+  }
+  const ordered = [...byGlyph.entries()].sort((a, b) => a[0] - b[0])
+
+  for (const [gid, cp] of ordered) {
+    const glyph = font.glyphForCodePoint(cp)
     // 无轮廓字形（如空格、组合用空字形）不作为图标导出
-    const d = glyphToPathData(glyph)
+    const cmds = fontkitPathToCommands(glyph.path)
+    const d = glyphToPathData(cmds)
     if (!d) continue
 
-    // 无 glyph name 的字体（如 111.ttf 全字形无名字）：
-    // 有 unicode 用 uniXXXX 命名，无 unicode 用 glyph-N 兜底，避免整个字体被静默丢弃
+    // 命名：优先 glyph 名（CFF CharStrings 名，如 wifi-weak）；无名字时用 uniXXXX 兜底
     let name = glyph.name
-    if (!name) {
-      if (glyph.unicode != null && glyph.unicode > 0) {
-        name = 'uni' + glyph.unicode.toString(16).toUpperCase().padStart(4, '0')
-      } else {
-        name = 'glyph-' + (i + 1)
-      }
+    if (!name || /^[gG]l?yph/i.test(name)) {
+      name = cp > 0 ? 'uni' + cp.toString(16).toUpperCase().padStart(4, '0') : 'glyph-' + (gid + 1)
     }
     // 重名处理
     if (seenNames.has(name)) {
@@ -128,17 +153,20 @@ export async function parseFontFile(file, size = 512) {
     }
     seenNames.add(name)
 
-    const svg = buildSvg(d, size)
-    result.push({ name, svg, unicode: glyph.unicode, advanceWidth: glyph.advanceWidth })
+    // advanceWidth（fontkit 字体单位，仅随结果返回供参考）
+    result.push({ name, svg: buildSvg(d, size), unicode: cp, advanceWidth: glyph.advanceWidth })
   }
 
   return result
 }
 
-// 根据 path 数据生成统一尺寸 SVG（viewBox 与 width/height 均为 size）
+// 根据 path 数据生成统一尺寸 SVG（viewBox 1000，width/height=size）
 export function buildSvg(d, size = 512) {
   const s = Number(size) || 512
   const viewBox = `0 0 1000 1000`
+  // fill-rule=evenodd：内外嵌套子路径按几何挖孔，不依赖路径方向。
+  // CFF/字体轮廓的方向约定与 SVG nonzero 不完全一致（opentype 解析 CFF 时方向被破坏，
+  // 曾导致空心环类图标被填充成实心大圆/粗环），evenodd 对该类字体图标是正确且健壮的选择
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" width="${s}" height="${s}" data-name="${escapeXml('')}">` +
-    `<path d="${escapeXml(d)}" fill="currentColor"/></svg>`
+    `<path d="${escapeXml(d)}" fill="currentColor" fill-rule="evenodd"/></svg>`
 }

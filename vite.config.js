@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
+import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig({
   plugins: [
@@ -34,6 +35,17 @@ export default defineConfig({
     })
   ],
   base: './',
+  resolve: {
+    alias: {
+      // fontkit 统一使用 node 版构建（dist/module.mjs）：
+      // 浏览器官方构建（browser-module.mjs）在浏览器运行时对 CFF 紧凑曲线编码存在不稳定的
+      // 解析 bug（F6AA 细线圆环被时好时坏解析成粗环，实测 112/96/64 波动，2026-09 排查确认）；
+      // node 版稳定可靠（fontkit 2.0.4，node 端多轮验证一致）。
+      // 依赖替代：node 版的 brotli 引用指到 stub（项目 woff2 解码走 fonteditor wasm，不触发）
+      'fontkit': fileURLToPath(new URL('./node_modules/fontkit/dist/module.mjs', import.meta.url)),
+      'brotli/decompress.js': fileURLToPath(new URL('./src/lib/brotli-stub.js', import.meta.url))
+    }
+  },
   build: {
     chunkSizeWarningLimit: 1600
   }
