@@ -1,7 +1,7 @@
 // 应用 Logo 文字生成：用内置 regular 基础字形（latin-regular.woff2 提取的 94 个 ASCII 字形）
 // 拼出"SnFont"字样的 SVG path（数据来源见 baseGlyphs.js 注释：Cera Round Pro Regular，unitsPerEm=1000）
 // 为什么用字形 path 而不是 <text>：不依赖外部字体文件/系统字体渲染，任何环境（离线/脱字体）显示一致
-import { getBaseGlyphData } from './baseGlyphs'
+import { getBaseGlyphData } from './baseGlyphs.js'
 
 // 浅灰色 Logo（与界面装饰色一致：滚动条浅灰 #c9cfdb）
 export const WORDMARK_COLOR = '#c9cfdb'

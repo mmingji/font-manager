@@ -43,6 +43,8 @@ onMounted(async () => {
     repairNotice.value = `已自动修复 ${n} 个异常图标（坐标越界）`
     setTimeout(() => (repairNotice.value = ''), 5000)
   }
+  // PWA 安装提示：浏览器满足安装条件才触发（未支持/已安装时不显示"安装"按钮）
+  window.addEventListener('beforeinstallprompt', handleInstallPrompt)
 })
 
 // 弹窗控制
@@ -50,6 +52,30 @@ const showParser = ref(false)
 const showImport = ref(false)
 const showImageToSvg = ref(false)
 const showSettings = ref(false)
+
+// ---------- PWA 安装提示 ----------
+// 浏览器满足安装条件（https/localhost + manifest + SW）时触发 beforeinstallprompt，
+// 届时顶栏出现「安装」按钮；点击调起原生安装对话框
+const installPrompt = ref(null) // 保存 beforeinstallprompt 事件（浏览器只允许在事件回调内 prompt）
+const canInstall = ref(false)
+
+function handleInstallPrompt(e) {
+  e.preventDefault()
+  installPrompt.value = e
+  canInstall.value = true
+}
+
+async function installApp() {
+  const evt = installPrompt.value
+  if (!evt) return
+  evt.prompt()
+  try {
+    const choice = await evt.userChoice // 用户选择后按钮收起（完成或不安装都不再提示）
+    canInstall.value = false
+    installPrompt.value = null
+  } catch { /* 已被处理/环境变化：忽略 */ }
+}
+
 // 图片转 SVG 弹窗的替换目标：非空 = 替换模式（从图标卡片「替换」进入），空 = 常规导入
 const replaceTarget = ref(null)
 // 空状态快捷上传的初始文件：按类型分流后交给对应弹窗自动处理
@@ -237,6 +263,7 @@ async function exportProject() {
         </div>
       </div>
       <div class="actions">
+        <button v-if="canInstall" class="install" @click="installApp" title="安装为可离线使用的应用">安装</button>
         <button @click="toggleSearch" :class="{ active: showSearch }" title="搜索图标">搜索</button>
         <button @click="toggleSelectMode">{{ selectMode ? '退出多选' : '多选' }}</button>
         <button @click="showSettings = true" title="项目名称/CSS前缀/字体名/SVG尺寸">设置</button>
