@@ -427,10 +427,17 @@ function miniSvg(svg) {
               :key="item.name + i"
               class="icon-item"
               :class="{ on: selected.has(i), conflict: conflictIndices.has(i), disabled: conflictMode === 'remove' && conflictIndices.has(i), current: currentIdx === i }"
-              @click="currentIdx = i"
-              :title="'点击查看大预览（' + item.name + '）'"
+              @click="toggleSelect(i)"
+              :title="'点击选中/取消选中；点右上角小眼睛查看大预览'"
             >
               <input type="checkbox" :checked="selected.has(i)" :disabled="conflictMode === 'remove' && conflictIndices.has(i)" @change="toggleSelect(i)" @click.stop />
+              <!-- 右上角小眼睛：与左上复选框对称，点击预览该字形（卡片点击则只管勾选） -->
+              <button class="preview-eye" type="button" @click.stop="currentIdx = i" :title="'预览：' + item.name">
+                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                  <path d="M1.6 8C3.2 5 5.9 3.4 8 3.4S12.8 5 14.4 8C12.8 11 10.1 12.6 8 12.6S3.2 11 1.6 8z" fill="none" stroke="currentColor" stroke-width="1.3" />
+                  <circle cx="8" cy="8" r="2.4" fill="none" stroke="currentColor" stroke-width="1.3" />
+                </svg>
+              </button>
               <div class="mini" v-html="miniSvg(item.svg)"></div>
               <span class="iname" :title="conflictIndices.has(i) ? '码位冲突：与内置基础字符/项目已占用码位相同' : item.name">{{ item.name }}</span>
               <span class="icode" v-if="item.unicode != null">{{ item.unicode.toString(16).toUpperCase().padStart(4, '0') }}</span>
@@ -794,6 +801,27 @@ header h3 {
 /* current = 大预览正在显示的字形：加粗外描边（强于勾选边框），与勾选(on)区分 */
 .icon-item.current {
   box-shadow: 0 0 0 3px var(--primary);
+}
+
+/* 右上角小眼睛：与左上复选框对称，浅灰装饰默认态，hover 主色 */
+.preview-eye {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-2); /* 浅灰：与同层级 logo/次要信息一致 */
+  padding: 3px 5px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.preview-eye:hover {
+  color: var(--primary);
+  background: #eef4ff;
 }
 
 /* 冲突字形（与内置基础字符或项目已占用码位相同）：标红提示 */
