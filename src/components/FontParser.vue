@@ -305,25 +305,43 @@ function miniSvg(svg) {
       </header>
 
       <div class="body">
-        <div class="settings">
-          <label class="size-field">
-            <span>SVG 尺寸</span>
-            <div class="size-row">
-              <select v-model="size">
-                <option v-for="s in SVG_SIZES" :key="s" :value="s">{{ s }} × {{ s }}</option>
-                <option value="custom">自定义</option>
-              </select>
-              <input v-if="size === 'custom'" v-model="customSize" class="custom-size" type="number" min="16" max="2048" placeholder="如 256" />
-            </div>
-          </label>
-          <button class="map-btn" @click="showMap = !showMap" type="button" :class="{ active: showMap }">名称映射表</button>
-          <label class="keep-unicode" title="#7：导入时保持原字体的 unicode 码位">
-            <input type="checkbox" v-model="keepUnicode" />
-            保持原字体 unicode
-          </label>
+        <!-- 选择字体虚线框：上半=解析前设置操作；下半=文件选择区（浅灰可点，仅此区域触发选择） -->
+        <div
+          class="dropzone"
+          :class="{ dragging, hasFile: parsed.length || parsing }"
+          @dragover.prevent="dragging = true"
+          @dragleave="dragging = false"
+          @drop.prevent="onDrop"
+        >
+          <input ref="fileInput" type="file" accept=".ttf,.otf,.woff,.woff2" hidden @change="onSelect" />
+          <!-- 上半：解析前操作（SVG尺寸 / 名称映射表 / 保持原 unicode） -->
+          <div class="dz-settings">
+            <label class="size-field">
+              <span>SVG 尺寸</span>
+              <div class="size-row">
+                <select v-model="size">
+                  <option v-for="s in SVG_SIZES" :key="s" :value="s">{{ s }} × {{ s }}</option>
+                  <option value="custom">自定义</option>
+                </select>
+                <input v-if="size === 'custom'" v-model="customSize" class="custom-size" type="number" min="16" max="2048" placeholder="如 256" />
+              </div>
+            </label>
+            <button class="map-btn" @click="showMap = !showMap" type="button" :class="{ active: showMap }">名称映射表</button>
+            <label class="keep-unicode" title="#7：导入时保持原字体的 unicode 码位">
+              <input type="checkbox" v-model="keepUnicode" />
+              保持原字体 unicode
+            </label>
+          </div>
+          <!-- 下半：文件选择提示（浅灰背景；只有这里可点击选择，解析前设置不干扰） -->
+          <div class="dz-pick" @click="fileInput.click()">
+            <p v-if="parsing">解析中…</p>
+            <p v-else-if="parsed.length">已解析：{{ fileInfo?.name }}（{{ fileInfo?.count }} 个字形）</p>
+            <p v-else>拖入字体文件，或点击选择<br /><small>支持 ttf / otf / woff / woff2</small></p>
+            <p class="dz-reselect" v-if="parsed.length || fileInfo">点击可重新选择字体</p>
+          </div>
         </div>
 
-        <!-- #8：unicode→名称 映射表 -->
+        <!-- #8：unicode→名称 映射表（虚线框下方独立展开） -->
         <div v-if="showMap" class="map-box">
           <p class="map-desc">
             <template v-if="builtinLoaded">
@@ -337,20 +355,6 @@ function miniSvg(svg) {
             <button type="button" @click="applyMap">应用映射</button>
             <span v-if="mapStatus" class="map-status">{{ mapStatus }}</span>
           </div>
-        </div>
-
-        <div
-          class="dropzone"
-          :class="{ dragging }"
-          @dragover.prevent="dragging = true"
-          @dragleave="dragging = false"
-          @drop.prevent="onDrop"
-          @click="fileInput.click()"
-        >
-          <input ref="fileInput" type="file" accept=".ttf,.otf,.woff,.woff2" hidden @change="onSelect" />
-          <p v-if="!parsing && !parsed.length">拖入字体文件，或点击选择<br /><small>支持 ttf / otf / woff / woff2</small></p>
-          <p v-else-if="parsing">解析中…</p>
-          <p v-else>已解析：{{ fileInfo?.name }}（{{ fileInfo?.count }} 个字形）<br /><small>点击可重新选择字体</small></p>
         </div>
 
         <p v-if="warning" class="warning">{{ warning }}</p>
@@ -451,148 +455,90 @@ header h3 {
   flex: 1;
 }
 
-.settings {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
+/* 虚线框：上半=解析前设置操作，下半=文件选择区 */
+.dropzone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: border-color 0.15s, background 0.15s;
 }
-
-.settings label {
-  font-size: 13px;
-  color: var(--text-2);
+.dropzone.dragging {
+  border-color: var(--primary);
 }
-
-/* SVG 尺寸字段：标签 + 下拉 横排 */
-.size-field {
+/* 上半：解析前操作（尺寸/映射/保持 unicode），紧凑横排，白色底 */
+.dz-settings {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 14px;
+  background: #fff;
+}
+.dz-settings .size-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   white-space: nowrap;
 }
-
-.size-field > span {
-  color: var(--text-2);
+.dz-settings .size-field > span {
   font-size: 13px;
+  color: var(--text-2);
 }
-
 .size-row {
   display: flex;
   align-items: center;
   gap: 6px;
 }
-
 .custom-size {
   width: 90px;
 }
-
 .keep-unicode {
   display: flex;
   align-items: center;
   gap: 6px;
   cursor: pointer;
   white-space: nowrap;
-  padding: 7px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #fff;
+  font-size: 13px;
+  color: var(--text-2);
+  margin-left: auto; /* 推最右，与前面操作分隔 */
 }
-
 .map-btn {
-  padding: 7px 14px;
+  padding: 6px 12px;
+  font-size: 13px;
 }
-
 .map-btn.active {
   border-color: var(--primary);
   color: var(--primary);
   background: #f0f6ff;
 }
-
-.map-box {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 12px;
-  margin-bottom: 12px;
-  background: #fafbfd;
-}
-
-.map-desc {
-  margin: 0 0 8px;
-  font-size: 12px;
-  color: var(--text-2);
-  line-height: 1.6;
-}
-
-.map-file-link {
-  color: var(--primary);
-  text-decoration: underline;
-  cursor: pointer;
-  font-family: Consolas, monospace;
-}
-
-.map-file-link:hover {
-  color: var(--primary-dark);
-}
-
-.map-box textarea {
-  width: 100%;
-  font-family: Consolas, monospace;
-  font-size: 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 8px;
-  resize: vertical;
-}
-
-.map-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 8px;
-}
-
-.map-status {
-  font-size: 12px;
-  color: var(--primary);
-}
-
-.icode {
-  /* 最小字号规则：全局不低于 12px */
-  font-size: 12px;
-  color: var(--text-2);
-  font-family: Consolas, monospace;
-}
-
-.rename-btn {
-  padding: 1px 6px;
-  font-size: 12px;
-  border-radius: 4px;
-}
-
-.dropzone {
-  border: 2px dashed var(--border);
-  border-radius: var(--radius);
-  padding: 30px;
+/* 下半：文件选择区（浅灰背景，仅此区域点击触发选择） */
+.dz-pick {
+  background: #f3f5f9;
+  border-top: 1px dashed var(--border);
+  padding: 12px 14px;
   text-align: center;
   color: var(--text-2);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s;
 }
-
-.dropzone.dragging {
-  border-color: var(--primary);
-  background: #f0f6ff;
+.dz-pick:hover {
+  background: #e9eef5;
 }
-
-.dropzone p {
+.dropzone.dragging .dz-pick {
+  background: #e3ecfa;
+}
+.dz-pick p {
   margin: 0;
 }
-
-.dropzone small {
+.dz-pick small {
   opacity: 0.7;
 }
-
+.dz-reselect {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--primary);
+  text-decoration: underline;
+}
 .warning {
   color: #b45309;
   background: #fffbeb;
