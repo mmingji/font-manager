@@ -26,10 +26,10 @@ export function buildBaseGlyphXml(weight = 'regular', skipCodes = null) {
   const map = {}
   entries.forEach(([ch, d], i) => {
     const code = ch.charCodeAt(0)
+    map[ch] = i + 1 // 始终记录全部字符（与 latin-N 编号对齐；跳过只影响 xml，见文件头部注释）
     if (skipCodes && skipCodes.has(code)) return // 被用户字形覆盖的码位不再内置
     const w = ch === ' ' ? 280 : adv[ch]
     xml.push(`<glyph glyph-name="latin-${i}" unicode="&#x${code.toString(16)};" horiz-adv-x="${w}" d="${d}"/>`)
-    map[ch] = i + 1
   })
   return { xml: xml.join('\n'), map, adv }
 }

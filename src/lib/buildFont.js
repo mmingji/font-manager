@@ -152,6 +152,18 @@ ${glyphsXml.join('\n')}
     }
   })
 
+
+  // 被覆盖的基础字符（ASCII 覆盖）：该字符的连字输入映射指向用户图标字形
+  // 背景：内置字形被跳过时 base.map 不含该字符，若不补映射，含该字符的图标名在 GSUB
+  // 中无法解析出输入序列 → 连字失效（2026-09 实测修复：覆盖 a/b/c 后 GSUB 全挂）
+  for (const icon of icons) {
+    const code = icon.code != null && typeof icon.code !== 'number' ? parseInt(String(icon.code), 16) : icon.code
+    if (code != null && !isNaN(code) && code >= 0x20 && code <= 0x7e) {
+      const id = iconNameToId[String(icon.name || '').trim()]
+      if (id != null) charToGlyphId[String.fromCharCode(code)] = id
+    }
+  }
+
   // 生成连字规则：每个图标名 → 图标 glyphId
   const ligatures = mapping
     .filter((m) => iconNameToId[m.name] != null)
