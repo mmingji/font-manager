@@ -301,7 +301,11 @@ function miniSvg(svg) {
     <div class="modal">
       <header>
         <h3>解析字体文件</h3>
-        <button class="close" @click="emit('close')">×</button>
+        <button class="close" @click="emit('close')" title="关闭">
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+            <path d="M3.5 3.5l9 9M12.5 3.5l-9 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+        </button>
       </header>
 
       <div class="body">
@@ -367,7 +371,13 @@ function miniSvg(svg) {
             <!-- 冲突字形检测提示 + 处理操作（存在码位冲突时显示：与内置 ASCII 基础字形或项目已有图标占用同码位） -->
             <span v-if="conflictIndices.size" class="conflict-bar">
               <span class="conflict-info">
-                <span class="conflict-dot">⚠</span>
+                <span class="conflict-dot">
+                  <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+                    <path d="M8 1.8L15 14H1L8 1.8z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" />
+                    <path d="M8 6.3v3.2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+                    <circle cx="8" cy="11.7" r="0.8" fill="currentColor" />
+                  </svg>
+                </span>
                 检测到 {{ conflictIndices.size }} 个冲突字符
                 <span class="conflict-tip">这些字形与内置基础拉丁字符或项目已有图标占用相同码位。若保留原码位，生成字体时会发生重复码位错误而失败。请选择处理方式：</span>
               </span>
@@ -668,7 +678,6 @@ header h3 {
   border-radius: 50%;
   background: #fecaca;
   color: #b91c1c;
-  font-size: 11px;
   font-weight: 700;
 }
 /* 悬浮解释：hover 显示完整说明 */

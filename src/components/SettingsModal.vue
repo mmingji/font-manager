@@ -104,7 +104,11 @@ async function applyMapRename() {
     <aside class="drawer" role="dialog" aria-label="项目设置">
       <header>
         <h3>项目设置</h3>
-        <button class="close" @click="emit('close')" title="关闭">×</button>
+        <button class="close" @click="emit('close')" title="关闭">
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+            <path d="M3.5 3.5l9 9M12.5 3.5l-9 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+        </button>
       </header>
       <div class="drawer-body">
         <!-- 基本信息：无标题，字段单列排布作为抽屉主体（移除了原「基本信息」标题） -->

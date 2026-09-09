@@ -206,7 +206,14 @@ async function exportProject() {
     </header>
     <!-- 启动自动修复提示：进度/结果独立展示，不随 toolbar 折叠而隐藏 -->
     <div class="repair-toast" v-if="repairNotice" :class="{ done: !repairing }">
-      <span class="repair-icon">{{ repairing ? '⟳' : '✓' }}</span>
+      <span class="repair-icon">
+        <svg v-if="repairing" class="spin" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+          <path d="M8 1.8a6.2 6.2 0 1 1-4.4 1.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+        </svg>
+        <svg v-else viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+          <path d="M2.5 8.6l3.4 3.4 7.6-8.1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </span>
       {{ repairNotice }}
     </div>
 
@@ -450,8 +457,13 @@ async function exportProject() {
   background: #16a34a;
 }
 .repair-icon {
-  font-size: 14px;
   line-height: 1;
+  display: inline-flex;
+}
+
+/* 修复进度旋转图标（复用 boot-spin 动画） */
+.repair-icon .spin {
+  animation: boot-spin 0.8s linear infinite;
 }
 @keyframes toast-in {
   from { opacity: 0; transform: translateX(-50%) translateY(-6px); }

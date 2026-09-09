@@ -14,6 +14,9 @@ const importing = ref(false)
 // #11：SVG 导入预览
 const previews = ref([]) // [{ id, name, svg, selected }]
 const selectedAll = ref(true)
+// 当前大预览项 id（点击卡片切换）；失效时回退到第一项
+const currentId = ref(null)
+const currentItem = computed(() => previews.value.find((p) => p.id === currentId.value) || previews.value[0] || null)
 
 function onDrop(e) {
   dragging.value = false
@@ -128,7 +131,12 @@ const previewCount = computed(() => previews.value.filter((p) => p.selected).len
     <div class="modal">
       <header>
         <h3>导入图标</h3>
-        <button class="close" @click="emit('close')">×</button>
+        <!-- 关闭：svg 图标（字符 × 已在全项目统一替换为 svg 图标） -->
+        <button class="close" @click="emit('close')" title="关闭">
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+            <path d="M3.5 3.5l9 9M12.5 3.5l-9 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+        </button>
       </header>
       <div class="body">
         <div
@@ -146,8 +154,16 @@ const previewCount = computed(() => previews.value.filter((p) => p.selected).len
         <p v-if="error" class="error">{{ error }}</p>
         <p v-if="importedNote && !error" class="note">{{ importedNote }}</p>
 
-        <!-- #11：SVG 导入预览（可改名、勾选） -->
+        <!-- #11：SVG 导入预览（大图预览 + 可改名、勾选） -->
         <template v-if="previews.length">
+          <!-- 大预览：按项目设置的 SVG 尺寸渲染当前项（点击下方卡片切换） -->
+          <div class="hero" v-if="currentItem">
+            <div class="hero-head">
+              <span class="hero-name">{{ currentItem.name }}</span>
+              <span class="hero-note">按项目设置的 SVG 尺寸（{{ store.svgSize }}px）预览</span>
+            </div>
+            <div class="hero-svg-box" v-html="currentItem.svg"></div>
+          </div>
           <div class="preview-head">
             <label><input type="checkbox" v-model="selectedAll" @change="toggleAllPreview" /> 全选</label>
             <span>已选 {{ previewCount }} / {{ previews.length }}</span>
@@ -157,8 +173,9 @@ const previewCount = computed(() => previews.value.filter((p) => p.selected).len
               v-for="p in previews"
               :key="p.id"
               class="preview-item"
-              :class="{ on: p.selected }"
-              @click="p.selected = !p.selected"
+              :class="{ on: p.selected, current: currentItem && currentItem.id === p.id }"
+              @click="currentId = p.id"
+              :title="'点击查看大预览（' + p.name + '）'"
             >
               <input type="checkbox" v-model="p.selected" @click.stop />
               <div class="mini" v-html="miniSvg(p.svg)"></div>
@@ -172,9 +189,6 @@ const previewCount = computed(() => previews.value.filter((p) => p.selected).len
           </div>
         </template>
       </div>
-      <footer>
-        <button @click="emit('close')">关闭</button>
-      </footer>
     </div>
   </div>
 </template>
@@ -256,6 +270,55 @@ header h3 {
   font-size: 12px;
 }
 
+/* 大预览：按项目 SVG 尺寸渲染，容器内等比压缩显示 */
+.hero {
+  margin: 14px 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: #fff;
+}
+
+.hero-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.hero-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hero-note {
+  font-size: 12px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.hero-svg-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  max-height: 340px;
+  overflow: hidden;
+}
+
+.hero-svg-box :deep(svg) {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 320px;
+  color: #333;
+}
+
 /* #11：预览 */
 .preview-head {
   display: flex;
@@ -299,6 +362,11 @@ header h3 {
   background: #f0f6ff;
 }
 
+/* current = 大预览正在显示的项：加粗外描边（明显强于勾选边框） */
+.preview-item.current {
+  box-shadow: 0 0 0 3px var(--primary);
+}
+
 .preview-item input {
   position: absolute;
   top: 5px;
@@ -334,10 +402,4 @@ header h3 {
   margin-top: 12px;
 }
 
-footer {
-  display: flex;
-  justify-content: flex-end;
-  padding: 14px 20px;
-  border-top: 1px solid var(--border);
-}
 </style>

@@ -21,7 +21,7 @@ const isReplace = computed(() => !!props.replaceTarget)
 const dragging = ref(false)
 const fileInput = ref(null)
 const error = ref('')
-// 转换参数（对本批所有位图统一生效：同批图通常同风格；个别不满意可调参数自动全量重转）
+// 新图的默认参数（当前选中项可独立调整，调整结果保存在项内 params 上）
 const threshold = ref(DEFAULT_THRESHOLD)
 const invert = ref(false)
 const turdsize = ref(DEFAULT_TURDSIZE) // 去噪点：映射 potrace turdsize，0~20
@@ -31,6 +31,15 @@ const previews = ref([])
 const selectedAll = ref(true)
 // 当前大预览项 id（点击卡片切换）；失效时回退到第一项
 const currentId = ref(null)
+// 当前项的调整参数（未调整过则用默认值初始化并保存到该项）。参数随项保存：每张图独立调参，互不影响
+const currentParams = computed(() => {
+  const cur = currentItem.value
+  if (!cur || cur.kind !== 'bitmap') return null
+  if (!cur.params) {
+    cur.params = { threshold: threshold.value, invert: invert.value, turdsize: turdsize.value }
+  }
+  return cur.params
+})
 const tracing = ref(false)
 const traceStatus = ref('')
 
@@ -101,7 +110,7 @@ async function traceTasks(tasks) {
   const total = tasks.length
   for (const t of tasks) {
     if (token !== taskToken) break // 期间有新任务/清空 → 放弃剩余
-    traceStatus.value = `转换中 ${done + 1}/${total}：${t.name}`
+    traceStatus.value = `转换中：${t.name}`
     try {
       let svg
       if (t.kind === 'svg') {
@@ -110,19 +119,28 @@ async function traceTasks(tasks) {
         if (!clean || !clean.includes('<path')) throw { code: 'EMPTY_TRACE', message: '未找到有效的 SVG path 数据' }
         svg = clean
       } else {
+        // 参数从该项自己的 params 取（未调整过则用 map 里的当前默认值）
+        const idx = previews.value.findIndex((p) => p.name === t.name)
+        const existing = idx >= 0 ? previews.value[idx] : null
+        const params = existing?.params || { threshold: threshold.value, invert: invert.value, turdsize: turdsize.value }
         svg = await imageFileToSvg(t.file, {
-          threshold: threshold.value,
-          invert: invert.value,
-          turdsize: turdsize.value,
+          threshold: params.threshold,
+          invert: params.invert,
+          turdsize: params.turdsize,
           size: store.svgSize // 与项目设置里的 SVG 尺寸三处统一生效
         })
       }
       if (token !== taskToken) break
       const idx = previews.value.findIndex((p) => p.name === t.name)
-      const item = { id: Date.now() + Math.random(), name: t.name, svg, file: t.kind === 'bitmap' ? t.file : null, kind: t.kind, selected: true }
-      if (idx >= 0) previews.value[idx] = item // 覆盖同名项，保持原位置
-      else previews.value.push(item)
-      currentId.value = item.id // 新转换/覆盖的项设为当前大预览
+      if (idx >= 0) {
+        // 覆盖同名项：保留原 id/selected/params，只换 svg（当前大预览不跳变、勾选不丢）
+        const old = previews.value[idx]
+        previews.value[idx] = { ...old, svg, file: t.kind === 'bitmap' ? t.file : null, kind: t.kind }
+      } else {
+        const item = { id: Date.now() + Math.random(), name: t.name, svg, file: t.kind === 'bitmap' ? t.file : null, kind: t.kind, selected: true, params: null }
+        previews.value.push(item)
+        currentId.value = item.id // 新项目设为当前大预览
+      }
     } catch (e) {
       if (token !== taskToken) break
       error.value = e.code === 'EMPTY_TRACE'
@@ -136,14 +154,14 @@ async function traceTasks(tasks) {
   traceStatus.value = ''
 }
 
-// 参数变化 → 防抖全量重转（只重转位图项；svg 项直接规范化无需重转；保留勾选状态与顺序）
+// 参数变化 → 防抖只重转当前选中项（参数按单张图独立保存，其他图不受影响）
 function scheduleRetrace() {
   clearTimeout(retraceTimer)
   retraceTimer = setTimeout(() => {
-    const tasks = previews.value
-      .filter((p) => p.kind === 'bitmap')
-      .map((p) => ({ file: p.file, name: p.name, kind: 'bitmap' }))
-    if (tasks.length) traceTasks(tasks)
+    const cur = currentItem.value
+    if (cur && cur.kind === 'bitmap') {
+      traceTasks([{ file: cur.file, name: cur.name, kind: 'bitmap' }])
+    }
   }, 200)
 }
 
@@ -216,7 +234,12 @@ function miniSvg(svg) {
     <div class="modal">
       <header>
         <h3>{{ isReplace ? `替换图标「${props.replaceTarget.name}」` : '图片转 SVG' }}</h3>
-        <!-- 关闭按钮走右上 × 已移除：避免误触，统一由底部「关闭」操作 -->
+        <!-- 关闭：右侧 svg 关闭图标（字符 × 已在全项目统一替换为 svg 图标） -->
+        <button class="close" @click="emit('close')" title="关闭">
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+            <path d="M3.5 3.5l9 9M12.5 3.5l-9 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+        </button>
       </header>
       <div class="body">
         <!-- 拖入/点选；替换模式允许 svg 文件，导入模式仅位图 -->
@@ -244,31 +267,30 @@ function miniSvg(svg) {
         </div>
         <p v-if="error" class="error">{{ error }}</p>
 
-        <!-- 参数条：阈值 / 反色 / 去噪点；仅位图项存在时显示（调整后 200ms 自动全量重转） -->
-        <div class="param-bar" v-if="previews.some((p) => p.kind === 'bitmap')">
-          <label class="param-item" title="亮度低于该值的像素视为图形（前景）；调高则图形范围变大">
-            阈值
-            <input type="range" min="0" max="255" step="1" v-model.number="threshold" @input="scheduleRetrace" />
-            <span class="param-val">{{ threshold }}</span>
-          </label>
-          <label class="param-item" title="暗底亮形状的图勾选后，亮色成为图形">
-            <input type="checkbox" v-model="invert" @change="scheduleRetrace" />
-            反色
-          </label>
-          <label class="param-item" title="面积小于该值的孤立色块/噪点被忽略；越大越干净但细节越少">
-            去噪点
-            <input type="range" min="0" max="20" step="1" v-model.number="turdsize" @input="scheduleRetrace" />
-            <span class="param-val">{{ turdsize }}</span>
-          </label>
-          <span class="trace-status" v-if="tracing">⟳ {{ traceStatus }}</span>
-          <span class="trace-status" v-else>已转 {{ previews.length }} 项（调参后自动重转）</span>
-        </div>
-
-        <!-- 大预览：按项目设置的 SVG 尺寸渲染当前项（可点击下方卡片切换） -->
+        <!-- 大预览：按项目设置的 SVG 尺寸渲染当前项；参数随当前选中项独立保存与调整 -->
         <div class="hero" v-if="currentItem">
           <div class="hero-head">
             <span class="hero-name">{{ currentItem.name }}</span>
             <span class="hero-note">按项目设置的 SVG 尺寸（{{ store.svgSize }}px）预览</span>
+          </div>
+          <!-- 参数条（仅位图项）：调整作用于当前选中项，下方点选其他图切换各自的参数 -->
+          <div class="param-bar" v-if="currentItem.kind === 'bitmap' && currentParams">
+            <span class="param-scope">参数仅作用于当前选中项</span>
+            <label class="param-item" title="亮度低于该值的像素视为图形（前景）；调高则图形范围变大">
+              阈值
+              <input type="range" min="0" max="255" step="1" v-model.number="currentParams.threshold" @input="scheduleRetrace" />
+              <span class="param-val">{{ currentParams.threshold }}</span>
+            </label>
+            <label class="param-item" title="暗底亮形状的图勾选后，亮色成为图形">
+              <input type="checkbox" v-model="currentParams.invert" @change="scheduleRetrace" />
+              反色
+            </label>
+            <label class="param-item" title="面积小于该值的孤立色块/噪点被忽略；越大越干净但细节越少">
+              去噪点
+              <input type="range" min="0" max="20" step="1" v-model.number="currentParams.turdsize" @input="scheduleRetrace" />
+              <span class="param-val">{{ currentParams.turdsize }}</span>
+            </label>
+            <span class="trace-status" v-if="tracing">⟳ {{ traceStatus }}</span>
           </div>
           <div class="hero-svg-box" v-html="currentItem.svg"></div>
         </div>
@@ -310,9 +332,6 @@ function miniSvg(svg) {
         <!-- 空状态说明 -->
         <p v-else class="hint">转换后在此预览描边结果：<br />黑色轮廓即未来字体的填充形状（单色 currentColor），照片/渐变/复杂细节不适合矢量化。</p>
       </div>
-      <footer>
-        <button @click="emit('close')">关闭</button>
-      </footer>
     </div>
   </div>
 </template>
@@ -397,19 +416,24 @@ header h3 {
   text-align: center;
 }
 
-/* 参数条 */
+/* 参数条（位于大预览头部下方） */
 .param-bar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 12px;
-  margin: 14px 0 0;
+  margin: 0 0 10px;
   padding: 8px 10px;
   background: #f8f9fc;
   border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 13px;
   color: var(--text-2);
+}
+
+.param-scope {
+  font-size: 12px;
+  color: var(--primary);
 }
 
 .param-item {
@@ -539,12 +563,9 @@ header h3 {
   background: #f0f6ff;
 }
 
-/* current = 大预览正在显示的项：外圈高亮，与勾选(on)区分 */
+/* current = 大预览正在显示的项：加粗外描边（明显强于勾选边框），与勾选(on)区分 */
 .preview-item.current {
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
-}
-.preview-item.current.on {
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
+  box-shadow: 0 0 0 3px var(--primary);
 }
 
 .preview-item input {
@@ -587,10 +608,4 @@ header h3 {
   margin-top: 12px;
 }
 
-footer {
-  display: flex;
-  justify-content: flex-end;
-  padding: 14px 20px;
-  border-top: 1px solid var(--border);
-}
 </style>
