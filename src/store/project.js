@@ -315,11 +315,19 @@ export const useProjectStore = defineStore('project', {
       return false
     },
 
-    // 扫描并修复所有异常图标，返回修复数量
-    repairAll() {
+    // 扫描并修复所有异常图标，返回修复数量。
+    // onProgress(done, total, fixed)：进度回调，每 BATCH 个让出一帧（避免大数据量阻塞 UI），
+    // 供启动时显示「正在检查… x/y」进度；完成后再由调用方提示修复数量。
+    async repairAll(onProgress = null) {
+      const BATCH = 300
       let n = 0
-      for (const icon of this.icons) {
-        if (this.repairSvg(icon)) n++
+      const total = this.icons.length
+      for (let i = 0; i < total; i++) {
+        if (this.repairSvg(this.icons[i])) n++
+        if (onProgress && (i % BATCH === 0 || i === total - 1)) {
+          onProgress(Math.min(i + 1, total), total, n)
+          await new Promise((r) => setTimeout(r, 0)) // 让出主线程，进度文字能渲染
+        }
       }
       if (n) this.persist()
       return n

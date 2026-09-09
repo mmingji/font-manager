@@ -12,8 +12,15 @@ import { flushPendingSnapshot } from './lib/persist'
 
 const store = useProjectStore()
 
+// 导入/导出下拉互斥：同时只开一个
+const importOpen = ref(false)
+const exportOpen = ref(false)
+function setImportOpen(v) { importOpen.value = v; if (v) exportOpen.value = false }
+function setExportOpen(v) { exportOpen.value = v; if (v) importOpen.value = false }
+
 // 启动时自动修复旧版本解析出的异常 SVG
 const repairNotice = ref('')
+const repairing = ref(false)
 onMounted(async () => {
   // 刷新/关闭前：IDB 异步写入可能未完成，同步把最新快照落 localStorage 兜底（防丢写）
   const flush = () => flushPendingSnapshot()
@@ -21,10 +28,17 @@ onMounted(async () => {
   window.addEventListener('beforeunload', flush)
   // 启动引导：先完成 IDB 数据恢复（booted gate 挡住首帧，避免「空白→闪现完整列表」）
   await store.bootstrap()
-  const n = store.repairAll()
+  // 自动修复：带进度提示（大数据量下逐批让出主线程），跑完显示数量 5s 后消失
+  repairing.value = true
+  const n = await store.repairAll((done, total, fixed) => {
+    repairNotice.value = `正在检查图标坐标… ${done}/${total}` + (fixed ? `（已修复 ${fixed}）` : '')
+  })
+  repairing.value = false
   if (n > 0) {
     repairNotice.value = `已自动修复 ${n} 个异常图标（坐标越界）`
     setTimeout(() => (repairNotice.value = ''), 5000)
+  } else {
+    setTimeout(() => (repairNotice.value = ''), 500) // 无修复也快速收起
   }
 })
 
@@ -160,18 +174,23 @@ async function exportProject() {
         <button @click="toggleSearch" :class="{ active: showSearch }" title="搜索图标">搜索</button>
         <button @click="toggleSelectMode">{{ selectMode ? '退出多选' : '多选' }}</button>
         <button @click="showSettings = true" title="项目名称/CSS前缀/字体名/SVG尺寸">设置</button>
-        <DropdownMenu label="导入" title="导入 SVG / 图片转 SVG / 解析字体">
+        <DropdownMenu label="导入" title="导入 SVG / 图片转 SVG / 解析字体" v-model:open="importOpen" @update:open="setImportOpen">
           <button @click="showImport = true">导入 SVG</button>
           <button @click="showImageToSvg = true">图片转 SVG</button>
           <button @click="showParser = true">解析字体</button>
         </DropdownMenu>
         <!-- 导出下拉：整个按钮为主色主操作(导出)，下载项目为普通菜单项 -->
-        <DropdownMenu label="导出" title="下载项目 / 导出 SVG" class="export-dd primary">
+        <DropdownMenu label="导出" title="下载项目 / 导出 SVG" class="export-dd primary menu-right" v-model:open="exportOpen" @update:open="setExportOpen">
           <button @click="exportProject">下载项目</button>
           <button @click="exportSvgs">导出 SVG</button>
         </DropdownMenu>
       </div>
     </header>
+    <!-- 启动自动修复提示：进度/结果独立展示，不随 toolbar 折叠而隐藏 -->
+    <div class="repair-toast" v-if="repairNotice" :class="{ done: !repairing }">
+      <span class="repair-icon">{{ repairing ? '⟳' : '✓' }}</span>
+      {{ repairNotice }}
+    </div>
 
     <!-- toolbar：未点搜索时仅显示一条灰色线；点搜索后显示搜索框 + 匹配统计；多选操作保留 -->
     <section class="toolbar" :class="{ searching: showSearch || selectMode }">
@@ -182,7 +201,6 @@ async function exportProject() {
         <!-- 搜索统计始终显示；repairNotice 为独立的启动修复提示，不与统计互斥 -->
         <div class="stat">共 {{ filteredIcons.length }} / {{ store.count }} 个图标</div>
       </template>
-      <div class="stat repair-notice" v-if="repairNotice">{{ repairNotice }}</div>
       <div class="toolbar-right" v-if="selectMode">
         <label class="select-all">
           <input type="checkbox" :checked="selectedIds.length === filteredIcons.length && filteredIcons.length > 0" @change="toggleAll" />
@@ -389,5 +407,35 @@ async function exportProject() {
 }
 @keyframes boot-spin {
   to { transform: rotate(360deg); }
+}
+
+/* 启动自动修复提示条：悬浮于内容区上方，进度(⟳)/完成(✓)两种状态 */
+.repair-toast {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #1f2937;
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.18);
+  animation: toast-in .2s ease-out;
+}
+.repair-toast.done {
+  background: #16a34a;
+}
+.repair-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-6px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 </style>

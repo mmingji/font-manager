@@ -1,13 +1,14 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 
-// 通用下拉菜单：props.trigger 为触发按钮文字，slots 放菜单项
-// 用法：<DropdownMenu label="导入"><button>导入 SVG</button><button>图片转 SVG</button></DropdownMenu>
+// 通用下拉菜单：props.label 为触发按钮文字，slots 放菜单项
+// 用法：<DropdownMenu label="导入"><button>导入 SVG</button>…</DropdownMenu>
+// open 受控（v-model:open）：父组件协调互斥（导入/导出同时只开一个）
 defineProps({
   label: { type: String, required: true },
   title: { type: String, default: '' }
 })
-const open = ref(false)
+const open = defineModel('open', { type: Boolean, default: false })
 const root = ref(null)
 
 function toggle() {
@@ -93,6 +94,11 @@ onUnmounted(() => document.removeEventListener('click', onDocClick))
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+/* 触发按钮靠近右缘时菜单向右对齐，避免溢出视口 */
+.dropdown.menu-right .menu {
+  left: auto;
+  right: 0;
 }
 .menu :deep(button) {
   border: none;
