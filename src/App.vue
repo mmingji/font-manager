@@ -158,8 +158,8 @@ async function exportProject() {
     <header class="topbar">
       <div class="brand">
         <div class="brand-text">
-          <!-- 顶栏固定为功能名「图标管理」；字体名/项目名不写入标题（工具性质），项目名在副信息行展示 -->
-          <h1>图标管理</h1>
+          <!-- 顶栏品牌固定为「SnFont 图标管理」（应用名，与用户项目名无关）；项目名在副信息行展示 -->
+          <h1>SnFont 图标管理</h1>
           <div class="project-sub">
             <span>{{ store.name }}</span>
             <span class="sub-sep">·</span>

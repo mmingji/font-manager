@@ -75,7 +75,7 @@ export async function exportProjectZip(project, size, withSvg = false) {
 // #18：@font-face 用 src 相对引用（不内联字体）
 // #19：点击名称/unicode/类名复制 + Toast
 // #3：页面顶部显示当前字重；布局撑满视口、右侧字母导航垂直居中并加粗
-// 标题跟随项目名：默认项目名按缺省样式显示，自定义名原样显示
+// demo 标题：页面 title 固定品牌「SnFont 图标预览」；h1 图标库名跟随项目名（默认 snfont→SnFont，自定义原样）
 export function buildDemoHtml(project, mapping, cssName, classPrefix = 'sn-', fontFamilyArg) {
   const icons = project.icons
   const weight = project.weight || 'regular'
@@ -119,7 +119,7 @@ export function buildDemoHtml(project, mapping, cssName, classPrefix = 'sn-', fo
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${projectTitle} 图标预览</title>
+<title>SnFont 图标预览</title>
 <style>
 @font-face {
   font-family: '${fontFamily}';
