@@ -521,6 +521,7 @@ header h3 {
   border-radius: var(--radius);
   overflow: hidden;
   transition: border-color 0.15s, background 0.15s;
+  flex: none; /* 弹窗弹性布局下固定区域不参与压缩（否则会被压成一条线） */
 }
 .dropzone.dragging {
   border-color: var(--primary);
@@ -749,6 +750,7 @@ header h3 {
   margin: 14px 0 8px;
   font-size: 13px;
   color: var(--text-2);
+  flex: none; /* 同上：固定区域不参与弹性压缩 */
 }
 
 .preview-head label {
