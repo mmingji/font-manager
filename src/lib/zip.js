@@ -76,6 +76,10 @@ export async function exportProjectZip(project, size, withSvg = false) {
 // #19：点击名称/unicode/类名复制 + Toast
 // #3：页面顶部显示当前字重；布局撑满视口、右侧字母导航垂直居中并加粗
 // demo 标题：页面 title 固定品牌「SnFont 图标预览」；h1 图标库名跟随项目名（默认 snfont→SnFont，自定义原样）
+// demo.html 单文件自带 favicon：内联 Sn SVG（data URI），下载后无外部文件也能显示页签图标
+const DEMO_FAVICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#3b82f6"/><text x="32" y="43" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700" fill="#fff" text-anchor="middle">Sn</text></svg>'
+const DEMO_FAVICON = 'data:image/svg+xml,' + encodeURIComponent(DEMO_FAVICON_SVG)
+
 export function buildDemoHtml(project, mapping, cssName, classPrefix = 'sn-', fontFamilyArg) {
   const icons = project.icons
   const weight = project.weight || 'regular'
@@ -120,6 +124,7 @@ export function buildDemoHtml(project, mapping, cssName, classPrefix = 'sn-', fo
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SnFont 图标预览</title>
+<link rel="icon" href="${DEMO_FAVICON}" />
 <style>
 @font-face {
   font-family: '${fontFamily}';
