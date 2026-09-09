@@ -377,9 +377,10 @@ function miniSvg(svg) {
         <p v-if="error" class="error">{{ error }}</p>
 
         <template v-if="parsed.length">
-          <!-- 大预览：默认隐藏，点击下方卡片后在此位置出现（网格往下推）；hero 右上 × 可关闭 -->
-          <div class="hero" v-if="currentItem && currentIdx >= 0">
-            <div class="hero-head">
+          <!-- 大预览：弹窗整体高度恒定——解析完成后即占位（空态提示"点击下方卡片"），
+               点击卡片后在同一高度内显示字形（网格下推但弹窗总高不变）；hero 右上 × 可关闭 -->
+          <div class="hero" v-if="parsed.length">
+            <div class="hero-head" v-if="currentItem && currentIdx >= 0">
               <span class="hero-name">{{ currentItem.name }}</span>
               <span class="hero-tools">
                 <span class="hero-note">按解析设置的 SVG 尺寸（{{ svgWidth(currentItem.svg) }}px）预览</span>
@@ -390,7 +391,8 @@ function miniSvg(svg) {
                 </button>
               </span>
             </div>
-            <div class="hero-svg-box" v-html="currentItem.svg"></div>
+            <div class="hero-svg-box" v-if="currentItem && currentIdx >= 0" v-html="currentItem.svg"></div>
+            <div class="hero-placeholder" v-else>点击下方卡片查看大预览</div>
           </div>
           <div class="preview-head">
             <label><input type="checkbox" :checked="selected.size === parsed.length && parsed.length > 0" @change="toggleAll" /> 全选</label>
@@ -650,13 +652,16 @@ header h3 {
   margin: 10px 0 0;
 }
 
-/* 大预览：按解析设置的 SVG 尺寸渲染，容器内等比压缩显示 */
+/* 大预览：固定高度（空态占位与显示字形高度一致），点击卡片只在内部换内容，弹窗总高不跳变 */
 .hero {
   margin: 14px 0 4px;
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px 14px;
   background: #fff;
+  height: 380px; /* 含头部(svg 320 区)的固定总高 */
+  display: flex;
+  flex-direction: column;
 }
 
 .hero-head {
@@ -693,7 +698,7 @@ header h3 {
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-2);
-  padding: 8px 12px; /* 放大点击区域（与 header 关闭按钮一致） */
+  padding: 3px 8px; /* hero 内关闭按钮热区保持小尺寸即可（header 关闭才要求大热区） */
   border-radius: 2px;
   display: inline-flex;
   align-items: center;
@@ -705,12 +710,16 @@ header h3 {
   color: var(--text);
 }
 
+.hero-head {
+  flex: none; /* 头部占位固定，不随内容高度伸缩 */
+}
+
 .hero-svg-box {
+  flex: 1;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 120px;
-  max-height: 340px;
   overflow: hidden;
 }
 
@@ -718,8 +727,18 @@ header h3 {
   width: auto;
   height: auto;
   max-width: 100%;
-  max-height: 320px;
+  max-height: 100%;
   color: #333;
+}
+
+/* 空态占位：与字形预览同一块区域，保证高度恒定 */
+.hero-placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-2);
+  font-size: 13px;
 }
 
 .preview-head {
