@@ -377,10 +377,10 @@ function miniSvg(svg) {
         <p v-if="error" class="error">{{ error }}</p>
 
         <template v-if="parsed.length">
-          <!-- 大预览：弹窗整体高度恒定——解析完成后即占位（空态提示"点击下方卡片"），
-               点击卡片后在同一高度内显示字形（网格下推但弹窗总高不变）；hero 右上 × 可关闭 -->
-          <div class="hero" v-if="parsed.length">
-            <div class="hero-head" v-if="currentItem && currentIdx >= 0">
+          <!-- 大预览：点击下方卡片才出现（网格让出空间下推）；hero 右上 × 可关闭。
+               高度恒定由 .modal.wide 固定高保证（网格弹性吸收 hero 插入/移除，弹窗总高不变） -->
+          <div class="hero" v-if="currentItem && currentIdx >= 0">
+            <div class="hero-head">
               <span class="hero-name">{{ currentItem.name }}</span>
               <span class="hero-tools">
                 <span class="hero-note">按解析设置的 SVG 尺寸（{{ svgWidth(currentItem.svg) }}px）预览</span>
@@ -391,8 +391,7 @@ function miniSvg(svg) {
                 </button>
               </span>
             </div>
-            <div class="hero-svg-box" v-if="currentItem && currentIdx >= 0" v-html="currentItem.svg"></div>
-            <div class="hero-placeholder" v-else>点击下方卡片查看大预览</div>
+            <div class="hero-svg-box" v-html="currentItem.svg"></div>
           </div>
           <div class="preview-head">
             <label><input type="checkbox" :checked="selected.size === parsed.length && parsed.length > 0" @change="toggleAll" /> 全选</label>
@@ -469,9 +468,11 @@ function miniSvg(svg) {
   transition: width 0.2s ease; /* 解析完成后加宽的过渡，避免生硬 */
 }
 
-/* 解析完成（有字形预览）后整体加宽，大预览区更舒展 */
+/* 解析完成（有字形预览）后整体加宽 + 固定高：
+    高度由 max-height 截断时恒为 86vh，网格区弹性吸收 hero 的插入/移除 → 点击大预览/关闭弹窗总高不变 */
 .modal.wide {
   width: min(960px, 96vw);
+  min-height: 86vh;
 }
 
 header {
@@ -505,8 +506,13 @@ header h3 {
 
 .body {
   padding: 16px 20px;
-  overflow-y: auto;
+  /* 弹窗整体不滚动：内容高度由内部区域各自消化（hero 固定 + 网格占余下空间滚动），
+     避免弹窗滚动条与网格滚动条同时出现 */
+  overflow: hidden;
   flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* 虚线框：上半=解析前设置操作，下半=文件选择区 */
@@ -654,12 +660,15 @@ header h3 {
 
 /* 大预览：固定高度（空态占位与显示字形高度一致），点击卡片只在内部换内容，弹窗总高不跳变 */
 .hero {
-  margin: 14px 0 4px;
+  margin: 14px 0 10px;
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px 14px;
   background: #fff;
-  height: 380px; /* 含头部(svg 320 区)的固定总高 */
+  /* 弹性高度：基准 320px，视口/剩余空间不足时优先压缩 hero（下限 180px）——
+     保证网格区保底可见可滚，弹窗固定高内不产生溢出滚动 */
+  flex: 0 1 320px;
+  min-height: 180px;
   display: flex;
   flex-direction: column;
 }
@@ -731,15 +740,7 @@ header h3 {
   color: #333;
 }
 
-/* 空态占位：与字形预览同一块区域，保证高度恒定 */
-.hero-placeholder {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-2);
-  font-size: 13px;
-}
+
 
 .preview-head {
   display: flex;
@@ -761,8 +762,11 @@ header h3 {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
   gap: 8px;
-  max-height: 320px;
+  /* 弹性占满 body 剩余高度（min-height:96px 保底，hero 出现时网格仍可见可滚），滚动条只出现在这里 */
+  flex: 1;
+  min-height: 96px;
   overflow-y: auto;
+  padding-right: 4px;
 }
 
 .icon-item {
