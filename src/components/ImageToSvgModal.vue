@@ -374,7 +374,7 @@ header h3 {
   border: 1px solid transparent; /* 默认无边框（透明边框占位，hover 变实色不位移） */
   background: transparent;
   color: var(--text-2);
-  padding: 3px 8px;
+  padding: 8px 12px; /* 放大点击区域（图标保持 14px，热区约 40x32） */
   border-radius: 2px; /* hover 出现边框时的圆角 */
   display: inline-flex;
   align-items: center;

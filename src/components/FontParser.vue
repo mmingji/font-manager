@@ -310,7 +310,7 @@ function miniSvg(svg) {
 
 <template>
   <div class="modal-mask">
-    <div class="modal">
+    <div class="modal" :class="{ wide: parsed.length }">
       <header>
         <h3>解析字体文件</h3>
         <button class="close" @click="emit('close')" title="关闭">
@@ -377,11 +377,18 @@ function miniSvg(svg) {
         <p v-if="error" class="error">{{ error }}</p>
 
         <template v-if="parsed.length">
-          <!-- 大预览：默认隐藏，点击下方卡片后在此位置出现（网格往下推）；再次点击其他卡片切换 -->
+          <!-- 大预览：默认隐藏，点击下方卡片后在此位置出现（网格往下推）；hero 右上 × 可关闭 -->
           <div class="hero" v-if="currentItem && currentIdx >= 0">
             <div class="hero-head">
               <span class="hero-name">{{ currentItem.name }}</span>
-              <span class="hero-note">按解析设置的 SVG 尺寸（{{ svgWidth(currentItem.svg) }}px）预览</span>
+              <span class="hero-tools">
+                <span class="hero-note">按解析设置的 SVG 尺寸（{{ svgWidth(currentItem.svg) }}px）预览</span>
+                <button class="hero-close" @click="currentIdx = -1" title="关闭大预览">
+                  <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                    <path d="M3.5 3.5l9 9M12.5 3.5l-9 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                  </svg>
+                </button>
+              </span>
             </div>
             <div class="hero-svg-box" v-html="currentItem.svg"></div>
           </div>
@@ -457,6 +464,12 @@ function miniSvg(svg) {
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  transition: width 0.2s ease; /* 解析完成后加宽的过渡，避免生硬 */
+}
+
+/* 解析完成（有字形预览）后整体加宽，大预览区更舒展 */
+.modal.wide {
+  width: min(960px, 96vw);
 }
 
 header {
@@ -476,7 +489,7 @@ header h3 {
   border: 1px solid transparent; /* 默认无边框（透明边框占位，hover 变实色不位移） */
   background: transparent;
   color: var(--text-2);
-  padding: 3px 8px;
+  padding: 8px 12px; /* 放大点击区域（图标保持 14px，热区约 40x32） */
   border-radius: 2px; /* hover 出现边框时的圆角 */
   display: inline-flex;
   align-items: center;
@@ -667,6 +680,29 @@ header h3 {
   font-size: 12px;
   color: var(--text-2);
   white-space: nowrap;
+}
+
+.hero-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 大预览关闭：与 header 关闭同一套视觉（默认无边框、hover 边框 2px 圆角） */
+.hero-close {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-2);
+  padding: 8px 12px; /* 放大点击区域（与 header 关闭按钮一致） */
+  border-radius: 2px;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  cursor: pointer;
+}
+.hero-close:hover {
+  border-color: var(--border);
+  color: var(--text);
 }
 
 .hero-svg-box {
