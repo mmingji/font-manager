@@ -9,6 +9,8 @@ import SettingsModal from './components/SettingsModal.vue'
 import DropdownMenu from './components/DropdownMenu.vue'
 import { exportSvgZip, exportProjectZip } from './lib/zip'
 import { flushPendingSnapshot } from './lib/persist'
+import { buildWordmarkSvg } from './lib/logo'
+import { isBitmapFile } from './lib/traceImage'
 
 const store = useProjectStore()
 
@@ -50,21 +52,67 @@ const showImageToSvg = ref(false)
 const showSettings = ref(false)
 // 图片转 SVG 弹窗的替换目标：非空 = 替换模式（从图标卡片「替换」进入），空 = 常规导入
 const replaceTarget = ref(null)
+// 空状态快捷上传的初始文件：按类型分流后交给对应弹窗自动处理
+const importInitialFiles = ref(null)   // svg → 导入 SVG 弹窗
+const imageInitialFiles = ref(null)    // 图片 → 图片转 SVG 弹窗
+const parserInitialFile = ref(null)    // 字体 → 解析字体弹窗
 
-function openImageToSvg() {
+function openImageToSvg(files = null) {
   replaceTarget.value = null
+  imageInitialFiles.value = files
   showImageToSvg.value = true
 }
 
 function openReplaceImageToSvg(icon) {
   replaceTarget.value = { id: icon.id, name: icon.name }
+  imageInitialFiles.value = null
   showImageToSvg.value = true
 }
 
 function closeImageToSvg() {
   showImageToSvg.value = false
   replaceTarget.value = null
+  imageInitialFiles.value = null
 }
+
+// ---------- 空状态：点击/拖拽上传，按类型自动分流 ----------
+const emptyDragging = ref(false)
+const emptyFileInput = ref(null)
+
+function isFontFileX(f) {
+  return /\.(ttf|otf|woff2|woff)$/i.test(f.name || '') || /font\//.test(f.type || '')
+}
+
+function onEmptyDrop(e) {
+  emptyDragging.value = false
+  onEmptyFiles([...(e.dataTransfer?.files || [])])
+}
+
+function onEmptyFiles(files) {
+  if (!files.length) return
+  const fonts = files.filter(isFontFileX)
+  const svgs = files.filter((f) => /\.svg$/i.test(f.name || '') || f.type === 'image/svg+xml')
+  const images = files.filter(isBitmapFile)
+  const groups = [fonts, svgs, images].filter((g) => g.length)
+  if (groups.length > 1) {
+    alert('请按类型分批上传（SVG / 字体 / 图片混合拖入暂不支持）')
+    return
+  }
+  if (fonts.length) {
+    parserInitialFile.value = fonts[0] // 字体解析一次处理一个文件
+    showParser.value = true
+  } else if (svgs.length) {
+    importInitialFiles.value = svgs
+    showImport.value = true
+  } else if (images.length) {
+    openImageToSvg(images)
+  } else {
+    alert('未识别的文件类型：支持 SVG / ttf / otf / woff / woff2 / 图片')
+  }
+}
+
+// 空状态 Logo：用内置 regular 字形生成的 SnFont 字样（浅灰装饰，见 lib/logo.js）
+const wordmark = buildWordmarkSvg('SnFont')
 
 // 搜索（#1：默认隐藏，按钮展开）
 const keyword = ref('')
@@ -249,19 +297,31 @@ async function exportProject() {
         }"
         @replace="openReplaceImageToSvg"
       />
-      <!-- 首次打开/无图标时的引导提示（替代"没有匹配的图标"，引导用户导入或解析） -->
+      <!-- 首次打开/无图标时的引导：大 Logo + 拖拽/点击上传（SVG/字体/图片自动分流）+ 快捷键入口 -->
       <div v-if="!store.count" class="empty">
-        <p class="empty-hint">项目还没有图标，请先导入 SVG，或上传字体文件解析</p>
+        <input ref="emptyFileInput" type="file" multiple hidden
+          accept=".svg,.ttf,.otf,.woff,.woff2,image/png,image/jpeg,image/webp,image/gif,image/bmp"
+          @change="(e) => { onEmptyFiles([...(e.target.files || [])]); e.target.value = '' }" />
+        <div class="empty-drop" :class="{ dragging: emptyDragging }"
+          @dragover.prevent="emptyDragging = true"
+          @dragleave="emptyDragging = false"
+          @drop.prevent="onEmptyDrop"
+          @click="emptyFileInput.click()">
+          <div class="logo" v-html="wordmark" aria-hidden="true"></div>
+          <p class="empty-hint">项目还没有图标，请先导入 SVG，或上传字体文件解析</p>
+          <p class="empty-sub">点击或拖入文件到此处：SVG 图标 / 字体文件 / 图片均可，将自动进入对应流程</p>
+        </div>
         <div class="empty-actions">
           <button @click="showImport = true">导入 SVG</button>
           <button @click="showParser = true">解析字体文件</button>
+          <button @click="openImageToSvg()">图片转 SVG</button>
         </div>
       </div>
     </main>
 
-    <FontParser v-if="showParser" @close="showParser = false" />
-    <ImportModal v-if="showImport" @close="showImport = false" />
-    <ImageToSvgModal v-if="showImageToSvg" :replace-target="replaceTarget" @close="closeImageToSvg" />
+    <FontParser v-if="showParser" :initial-file="parserInitialFile" @close="showParser = false; parserInitialFile = null" />
+    <ImportModal v-if="showImport" :initial-files="importInitialFiles" @close="showImport = false; importInitialFiles = null" />
+    <ImageToSvgModal v-if="showImageToSvg" :replace-target="replaceTarget" :initial-files="imageInitialFiles" @close="closeImageToSvg" />
     <SettingsModal v-if="showSettings" @close="showSettings = false" />
   </div>
 </template>
@@ -392,21 +452,56 @@ async function exportProject() {
 
 .empty {
   text-align: center;
-  padding: 80px 0;
+  padding: 48px 0 64px;
   color: var(--text-2);
+}
+
+/* 空状态上传区：整块可点击/拖拽，按文件类型自动分流 */
+.empty-drop {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  background: #fafbfd;
+  padding: 44px 20px 30px;
+  cursor: pointer;
+  transition: all 0.15s;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.empty-drop.dragging {
+  border-color: var(--primary);
+  background: #f0f6ff;
+}
+
+/* SnFont 字形 Logo：用内置 regular 字形生成的 svg（浅灰，见 lib/logo.js） */
+.logo {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.logo svg {
+  width: 220px;
+  height: auto;
 }
 
 .empty-hint {
   font-size: 15px;
   color: var(--text);
-  margin: 0 0 16px;
+  margin: 0 0 8px;
+}
+
+.empty-sub {
+  font-size: 12px;
+  color: var(--text-2);
+  margin: 0;
 }
 
 .empty-actions {
   display: flex;
   gap: 10px;
   justify-content: center;
-  margin-top: 16px;
+  margin-top: 18px;
 }
 
 /* 启动引导加载占位：居中显示 spinner + 文案 */

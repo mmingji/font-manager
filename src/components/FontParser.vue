@@ -9,6 +9,11 @@ import { isBaseAscii } from '../lib/codepointPlan'
 const emit = defineEmits(['close'])
 const store = useProjectStore()
 
+// 空状态快捷上传传入的字体文件：挂载后自动开始解析（无需用户再点选择）
+const props = defineProps({
+  initialFile: { type: Object, default: null }
+})
+
 const SVG_SIZES = [128, 512, 1024]
 
 const dragging = ref(false)
@@ -56,6 +61,8 @@ onMounted(async () => {
     builtinMap.value = map
     builtinLoaded.value = true
   }
+  // 空状态快捷上传的字体：直接进入解析流程
+  if (props.initialFile) handleFiles([props.initialFile])
 })
 
 function onDrop(e) {

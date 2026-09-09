@@ -1,10 +1,15 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useProjectStore } from '../store/project'
 import { normalizeSvgImport } from '../lib/svgNormalize'
 
 const emit = defineEmits(['close'])
 const store = useProjectStore()
+
+// 空状态快捷上传传入的 svg/project 文件列表：挂载后自动进入导入预览
+const props = defineProps({
+  initialFiles: { type: Array, default: null }
+})
 
 const dragging = ref(false)
 const error = ref('')
@@ -27,6 +32,11 @@ function onDrop(e) {
 function onSelect(e) {
   handleFiles([...(e.target.files || [])])
 }
+
+// 空状态快捷上传：挂载后自动处理传入的文件（进入预览，等用户确认导入）
+onMounted(() => {
+  if (props.initialFiles?.length) handleFiles(props.initialFiles)
+})
 
 async function handleFiles(files) {
   if (!files.length) return

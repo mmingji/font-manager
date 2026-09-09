@@ -3,7 +3,7 @@
 // 大尺寸预览（按项目设置 SVG 尺寸渲染）→ 预览网格（勾选/改名/下载）→ 导入项目或替换指定图标
 // 交互与链路细节见 lib/traceImage.js（库选型/许可/方向修正等决策记录）
 // 替换模式（replaceTarget 非空）：从图标卡片「替换」进入，支持 .svg 与位图文件，结果直接替换目标图标
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useProjectStore } from '../store/project'
 import { imageFileToSvg, isBitmapFile, DEFAULT_THRESHOLD, DEFAULT_TURDSIZE } from '../lib/traceImage'
 import { normalizeSvgImport } from '../lib/svgNormalize'
@@ -11,7 +11,9 @@ import { exportSvgZip } from '../lib/zip'
 
 const props = defineProps({
   // 替换目标：{ id, name }；非空 = 替换模式（只处理单张，结果为替换而非新增）
-  replaceTarget: { type: Object, default: null }
+  replaceTarget: { type: Object, default: null },
+  // 空状态快捷上传传入的图片文件：挂载后自动开始转换
+  initialFiles: { type: Array, default: null }
 })
 const emit = defineEmits(['close'])
 const store = useProjectStore()
@@ -48,6 +50,11 @@ let taskToken = 0       // 任务令牌：新任务（拖入/重转/清空）递
 
 const currentItem = computed(() => previews.value.find((p) => p.id === currentId.value) || previews.value[0] || null)
 const previewCount = computed(() => previews.value.filter((p) => p.selected).length)
+
+// 空状态快捷上传：挂载后自动转换传入的图片（进入预览，等用户确认导入）
+onMounted(() => {
+  if (props.initialFiles?.length && !props.replaceTarget) handleFiles(props.initialFiles)
+})
 
 // ---------- 文件接入 ----------
 function onDrop(e) {
