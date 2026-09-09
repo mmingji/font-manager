@@ -364,7 +364,7 @@ function miniSvg(svg) {
           <div class="preview-head">
             <label><input type="checkbox" :checked="selected.size === parsed.length && parsed.length > 0" @change="toggleAll" /> 全选</label>
             <span>{{ selected.size }} / {{ parsed.length }}</span>
-            <!-- 冲突字形检测提示 + 处理操作（仅存在 ASCII 基础区冲突时显示） -->
+            <!-- 冲突字形检测提示 + 处理操作（存在码位冲突时显示：与内置 ASCII 基础字形或项目已有图标占用同码位） -->
             <span v-if="conflictIndices.size" class="conflict-bar">
               <span class="conflict-info">
                 <span class="conflict-dot">⚠</span>

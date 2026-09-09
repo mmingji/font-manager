@@ -66,9 +66,6 @@ export const useProjectStore = defineStore('project', {
   },
 
   getters: {
-    groups(state) {
-      return groupIcons(state.icons)
-    },
     count(state) {
       return state.icons.length
     }

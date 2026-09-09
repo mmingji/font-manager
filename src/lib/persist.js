@@ -109,16 +109,3 @@ export function flushPendingSnapshot() {
   } catch { /* 超限可忽略 */ }
 }
 
-// 清除项目（IDB + LS）
-export async function clearProject() {
-  try {
-    const db = await openDb()
-    await new Promise((resolve) => {
-      const tx = db.transaction(DB_STORE, 'readwrite')
-      tx.objectStore(DB_STORE).delete(DB_KEY)
-      tx.oncomplete = () => resolve()
-      tx.onerror = () => resolve()
-    })
-  } catch { /* ignore */ }
-  try { localStorage.removeItem(STORAGE_KEY) } catch { /* ignore */ }
-}
