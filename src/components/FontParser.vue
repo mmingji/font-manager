@@ -17,12 +17,11 @@ const parsing = ref(false)
 const error = ref('')
 const warning = ref('')
 const parsed = ref([]) // { name, svg, unicode, advanceWidth }
-// 当前大预览字形下标（点击卡片切换；-1/越界时回退到第一项）
+// 当前大预览字形下标：-1 = 尚未点击任何卡片（大预览默认隐藏，点卡片后才出现并把网格往下推）
 const currentIdx = ref(-1)
 const currentItem = computed(() => {
-  if (!parsed.value.length) return null
-  const idx = currentIdx.value >= 0 && currentIdx.value < parsed.value.length ? currentIdx.value : 0
-  return parsed.value[idx]
+  if (currentIdx.value < 0 || currentIdx.value >= parsed.value.length) return null
+  return parsed.value[currentIdx.value]
 })
 // 大预览角标取解析产物 svg 的 width（解析设置里选的尺寸，如 512/1024/custom）
 function svgWidth(svg) {
@@ -80,6 +79,7 @@ async function handleFiles(files) {
   parsing.value = true
   parsed.value = []
   selected.value = new Set()
+  currentIdx.value = -1 // 重解析重置：等待重新点击卡片再展示大预览
   try {
     // 文件过大预警（>10MB 可能解析失败或极慢，但不阻断）
     if (fontFile.size > 10 * 1024 * 1024) {
@@ -377,8 +377,8 @@ function miniSvg(svg) {
         <p v-if="error" class="error">{{ error }}</p>
 
         <template v-if="parsed.length">
-          <!-- 大预览：按解析设置的 SVG 尺寸渲染当前字形（点击下方卡片切换） -->
-          <div class="hero" v-if="currentItem">
+          <!-- 大预览：默认隐藏，点击下方卡片后在此位置出现（网格往下推）；再次点击其他卡片切换 -->
+          <div class="hero" v-if="currentItem && currentIdx >= 0">
             <div class="hero-head">
               <span class="hero-name">{{ currentItem.name }}</span>
               <span class="hero-note">按解析设置的 SVG 尺寸（{{ svgWidth(currentItem.svg) }}px）预览</span>
@@ -411,7 +411,7 @@ function miniSvg(svg) {
               v-for="(item, i) in parsed"
               :key="item.name + i"
               class="icon-item"
-              :class="{ on: selected.has(i), conflict: conflictIndices.has(i), disabled: conflictMode === 'remove' && conflictIndices.has(i), current: parsed[currentIdx] === item || (currentIdx < 0 && i === 0) }"
+              :class="{ on: selected.has(i), conflict: conflictIndices.has(i), disabled: conflictMode === 'remove' && conflictIndices.has(i), current: currentIdx === i }"
               @click="currentIdx = i"
               :title="'点击查看大预览（' + item.name + '）'"
             >

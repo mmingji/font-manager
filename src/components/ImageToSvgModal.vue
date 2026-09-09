@@ -370,8 +370,6 @@ header h3 {
   font-size: 16px;
 }
 
-.body {
-
 .close {
   border: 1px solid transparent; /* 默认无边框（透明边框占位，hover 变实色不位移） */
   background: transparent;
@@ -387,6 +385,8 @@ header h3 {
   border-color: var(--border);
   color: var(--text);
 }
+
+.body {
   padding: 20px;
   overflow-y: auto;
 }
