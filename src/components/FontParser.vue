@@ -511,6 +511,50 @@ header h3 {
   color: var(--primary);
   background: #f0f6ff;
 }
+
+/* 映射表面板（虚线框下方展开）——恢复原版样式 */
+.map-box {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 10px;
+  background: #fafbfd;
+}
+.map-desc {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.6;
+}
+.map-file-link {
+  color: var(--primary);
+  text-decoration: underline;
+  cursor: pointer;
+  font-family: Consolas, monospace;
+}
+.map-file-link:hover {
+  color: var(--primary-dark);
+}
+.map-box textarea {
+  width: 100%;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  resize: vertical;
+}
+/* 应用映射按钮与状态提示同一行横排（不独占一行） */
+.map-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.map-status {
+  font-size: 12px;
+  color: var(--primary);
+}
 /* 下半：文件选择区（浅灰背景，仅此区域点击触发选择） */
 .dz-pick {
   background: #f3f5f9;

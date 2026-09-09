@@ -315,6 +315,20 @@ export const useProjectStore = defineStore('project', {
       return false
     },
 
+    // 快速探测是否存在坐标越界等异常 SVG（只判断不修改）。
+    // 供 App 启动时决定是否值得展示修复进度：正常数据(无异常)时完全静默，
+    // 避免「每次刷新都闪一遍正在检查」的打扰。
+    probeAbnormal() {
+      for (const icon of this.icons) {
+        try {
+          if (normalizeSvg(icon.svg, this.svgSize) !== icon.svg) return true
+        } catch {
+          return true
+        }
+      }
+      return false
+    },
+
     // 扫描并修复所有异常图标，返回修复数量。
     // onProgress(done, total, fixed)：进度回调，每 BATCH 个让出一帧（避免大数据量阻塞 UI），
     // 供启动时显示「正在检查… x/y」进度；完成后再由调用方提示修复数量。

@@ -28,17 +28,18 @@ onMounted(async () => {
   window.addEventListener('beforeunload', flush)
   // 启动引导：先完成 IDB 数据恢复（booted gate 挡住首帧，避免「空白→闪现完整列表」）
   await store.bootstrap()
-  // 自动修复：带进度提示（大数据量下逐批让出主线程），跑完显示数量 5s 后消失
-  repairing.value = true
-  const n = await store.repairAll((done, total, fixed) => {
-    repairNotice.value = `正在检查图标坐标… ${done}/${total}` + (fixed ? `（已修复 ${fixed}）` : '')
-  })
-  repairing.value = false
-  if (n > 0) {
+  // 自动修复（按需）：先用轻量探测判断是否存在异常 SVG——
+  // 无异常则完全静默（正常数据刷新不该每次闪「检查中」）；
+  // 有异常才展示进度并修复，修复完提示数量 5s 后消失。
+  const hasAbnormal = store.probeAbnormal()
+  if (hasAbnormal) {
+    repairing.value = true
+    const n = await store.repairAll((done, total, fixed) => {
+      repairNotice.value = `正在修复异常图标坐标… ${done}/${total}` + (fixed ? `（已修复 ${fixed}）` : '')
+    })
+    repairing.value = false
     repairNotice.value = `已自动修复 ${n} 个异常图标（坐标越界）`
     setTimeout(() => (repairNotice.value = ''), 5000)
-  } else {
-    setTimeout(() => (repairNotice.value = ''), 500) // 无修复也快速收起
   }
 })
 
@@ -174,13 +175,13 @@ async function exportProject() {
         <button @click="toggleSearch" :class="{ active: showSearch }" title="搜索图标">搜索</button>
         <button @click="toggleSelectMode">{{ selectMode ? '退出多选' : '多选' }}</button>
         <button @click="showSettings = true" title="项目名称/CSS前缀/字体名/SVG尺寸">设置</button>
-        <DropdownMenu label="导入" title="导入 SVG / 图片转 SVG / 解析字体" v-model:open="importOpen" @update:open="setImportOpen">
+        <DropdownMenu label="导入" title="导入 SVG / 图片转 SVG / 解析字体" :open="importOpen" @update:open="setImportOpen">
           <button @click="showImport = true">导入 SVG</button>
           <button @click="showImageToSvg = true">图片转 SVG</button>
           <button @click="showParser = true">解析字体</button>
         </DropdownMenu>
         <!-- 导出下拉：整个按钮为主色主操作(导出)，下载项目为普通菜单项 -->
-        <DropdownMenu label="导出" title="下载项目 / 导出 SVG" class="export-dd primary menu-right" v-model:open="exportOpen" @update:open="setExportOpen">
+        <DropdownMenu label="导出" title="下载项目 / 导出 SVG" class="export-dd primary menu-right" :open="exportOpen" @update:open="setExportOpen">
           <button @click="exportProject">下载项目</button>
           <button @click="exportSvgs">导出 SVG</button>
         </DropdownMenu>

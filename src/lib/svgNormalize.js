@@ -294,20 +294,21 @@ export function normalizeSvgImport(svg, size = 512) {
     }
     if (!allCmds.length) return { svg, changed: false }
 
-    // 检查是否已是"铺满 1000"的规范图标：bbox 需接近 0~1000 且全大写且无复杂命令。
-    // 注意：不能只看坐标在 0~1001 内——像 imagetracerjs 转换的像素坐标(如 34~200)也在该范围，
-    // 但实际未铺满 1000，会被误判为已规范而漏缩放。因此要求 bbox 宽高都较大(≥900)才算已规范。
+    // 幂等判定：bbox 已在 0~1000 范围内（允许 ±1 容差）且命令全大写 → 已规范，直接 unchanged。
+    // 背景（为什么不能要求 bbox 宽高都 ≥900）：窄长形合法图标（如 875×1000、1000×863）
+    // 本来就占不满正方形画布；若强制要求铺满，这类图标每轮都会被误判"需缩放"、
+    // 被 toFixed 重算产生微差 → 永不收敛，导致每次刷新都提示修复。
+    // 真正需要归一化的是：坐标越出 0~1000（负坐标/超大）、或整图极小（像素小图，如 bbox<300）。
     const bb = pathBBox(allCmds)
     const allUpper = allCmds.every((c) => c.raw === c.type)
-    const hasComplex = allCmds.some((c) => ['H', 'V', 'S', 'T', 'A'].includes(c.type))
     const w = bb.maxX - bb.minX
     const h = bb.maxY - bb.minY
-    const alreadyNormal = w >= 900 && h >= 900 && !hasComplex
+    const inside = bb.minX >= -1 && bb.minY >= -1 && bb.maxX <= 1001 && bb.maxY <= 1001
+    const tiny = w < 300 && h < 300 // 宽高都极小才视为像素位图需放大；扁平宽图(h小但w≈1000)不算
+    const alreadyNormal = inside && !tiny
 
     if (alreadyNormal && allUpper) {
-      // 已是标准格式，只统一尺寸
-      const clean = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="${size}" height="${size}"><path d="${commandsToPathData(allCmds)}" fill="currentColor"/></svg>`
-      return { svg: clean, changed: clean !== svg }
+      return { svg, changed: false } // 已规范：原样保留，不重写（幂等）
     }
 
     // 需要归一化：缩放到 1000 内并居中（w/h 已在上面定义）

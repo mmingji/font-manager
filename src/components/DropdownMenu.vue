@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 
 // 通用下拉菜单：props.label 为触发按钮文字，slots 放菜单项
 // 用法：<DropdownMenu label="导入"><button>导入 SVG</button>…</DropdownMenu>

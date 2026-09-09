@@ -46,3 +46,6 @@ Cheatsheet*.pdf
 snfont-regular-demo/
 # ===== 测试素材 =====
 icontest.png
+
+# 本地测试素材 svg
+svgs/
