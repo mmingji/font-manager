@@ -18,7 +18,7 @@
 | 数据持久化   | IndexedDB 主存储 + localStorage 快照：数千图标不丢；写队列串行 + 刷新前同步兜底；启动 boot gate 避免大数据先空白                                                                                                                     |
 | 启动自检    | 按需检测异常 SVG 坐标（越界→归一化 0~1000）；仅确有异常才提示修复进度，正常数据完全静默（幂等）                                                                                                                                           |
 | 离线运行    | `启动服务.bat` 起本地服务开浏览器 http://localhost:2333，`关闭服务.bat` 停止                                                                                                                                         |
-| 图片转 SVG | 入口占位「功能开发中」（矢量化难点已记录）                                                                                                                                                                            |
+| 图片转 SVG | 拖入/多选位图（png/jpg/webp/gif 等）→ potrace(WASM) 矢量化：阈值滑杆+反色实时调参重转 → 预览改名/勾选 → 导入；图标卡片「替换」也可直接选图片转 SVG                                                                                                                                            |
 
 ## 技术栈
 
@@ -27,6 +27,7 @@
 - fonteditor-core：TrueType 构建、ttf→woff/woff2 转换
 - 自研 GSUB 生成器：连字表(lookup type 4)手写二进制注入
 - JSZip + file-saver：zip 打包下载
+- esm-potrace-wasm：位图矢量化（图片转 SVG；GPL-2.0 许可说明见交接文档决策记录）
 
 ## 快速开始
 
@@ -50,7 +51,7 @@ npm run build      # 构建到 dist/
 
 ## 使用流程
 
-1. **解析字体**：顶部「导入▾」→「解析字体」→ 虚线框上半设置、下半拖入字体 → 预览（改名/处理码位冲突）→ 导入或下载
+1. **导入图标**：顶部「导入▾」→「导入 SVG」批量导入；「图片转 SVG」把位图矢量化（阈值/反色可调、支持多图）；「解析字体」上传 ttf/otf/woff/woff2 拆解字形 → 三种入口均进入预览（改名/勾选/冲突处理）→ 导入或下载
 2. **管理图标**：主页面分组展示；「多选」批量删除/导出；「设置」抽屉改配置
 3. **下载项目**：「导出▾」→「下载项目」，得 `<字体名>-project.zip`
 4. **使用字体**：Web 引 css 用 `<i class="sn-trash">`；桌面装 ttf 输入图标名即替换（GSUB）；demo.html 可复制进 PS
@@ -64,7 +65,8 @@ src/
 │  ├─ buildFont.js      # TrueType 构建 + y 翻转 + css 生成
 │  ├─ gsub.js           # GSUB 连字表生成与注入
 │  ├─ baseGlyphs.js     # 内置基础拉丁字形（双字重，连字触发）
-│  ├─ svgNormalize.js   # 复杂 SVG 规范化（幂等）
+│  ├─ svgNormalize.js   # 复杂 SVG 规范化（幂等；另含 normalizeSvgForce 强制归一化）
+│  ├─ traceImage.js     # 位图 → SVG 矢量化（canvas 二值化 + potrace WASM 封装）
 │  ├─ unicodeMap.js     # unicode→名称 映射表工具
 │  ├─ codepointPlan.js  # 码位规划常量（保留区/ASCII 基础区）与判定
 │  ├─ codepointStats.js # 参考映射占用动态统计
@@ -81,3 +83,4 @@ src/
 - 图标码位永久固定；新增从 U+EE00+ 保留区分配，与参考字体不冲突
 - 字重只影响产物文件名与字母/符号字形；图标名/unicode/css 类名与字重无关
 - 生成字体过程不出现任何第三方图标库名称
+- 图片转 SVG 适用边界：白底/透明底纯色、线稿类图标效果最佳（阈值/反色可调）；照片、渐变、复杂细节不适合矢量化，且结果恒为单色轮廓（字体图标的天然约束）

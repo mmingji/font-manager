@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "esm-potrace-wasm": "^0.5.1",
     "file-saver": "^2.0.5",
     "fonteditor-core": "^2.1.10",
     "jszip": "^3.10.1",

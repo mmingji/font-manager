@@ -2,6 +2,7 @@
 import { ref, computed, nextTick } from 'vue'
 import { useProjectStore } from '../store/project'
 import { normalizeSvgImport } from '../lib/svgNormalize'
+import { imageFileToSvg, isBitmapFile } from '../lib/traceImage'
 
 const props = defineProps({
   icon: { type: Object, required: true },
@@ -59,6 +60,13 @@ async function onSvgSelected(e) {
   e.target.value = ''
   if (!file) return
   try {
+    if (isBitmapFile(file)) {
+      // 图片文件：矢量化后替换（此处无参数 UI，用默认阈值/无反色；
+      // 需要阈值/反色调节的场景请走顶部「导入▾ → 图片转 SVG」，入库后再删除旧图标）
+      const clean = await imageFileToSvg(file, { size: store.svgSize })
+      store.replaceSvg(props.icon.id, clean)
+      return
+    }
     const text = await file.text()
     const { svg: clean } = normalizeSvgImport(text, store.svgSize)
     if (!clean || !clean.includes('<path')) {
@@ -112,7 +120,7 @@ function remove() {
       <button class="op" title="替换 SVG" @click="pickSvg">替换</button>
       <button class="op danger" title="删除" @click="remove">删除</button>
     </div>
-    <input ref="svgFileInput" type="file" accept=".svg" hidden @change="onSvgSelected" />
+    <input ref="svgFileInput" type="file" accept=".svg,image/png,image/jpeg,image/webp,image/gif,image/bmp" hidden @change="onSvgSelected" />
   </div>
 </template>
 

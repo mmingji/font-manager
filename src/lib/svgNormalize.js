@@ -272,26 +272,45 @@ export function commandsToPathData(cmds, scale = 1, offsetX = 0, offsetY = 0) {
   }
   return out
 }
+// 内部共享：从 svg 字符串收集所有 <path> 的 d 命令（合并为一个命令序列）
+// - 用正则提取 d 属性（精确匹配，避免 id= 干扰；不依赖 DOMParser，浏览器/Node 行为一致）
+// - 过滤孤立单点 path（如 Illustrator 导出的 M320,256 这类只有 moveTo、无轮廓的点），
+//   否则它们会被计入 bbox 拉大整体范围，导致真实图标被缩小/偏移
+// 返回 [] 表示没有有效轮廓（无 path / 全是孤立单点）
+function collectPathCommands(svg) {
+  const pathRe = /<path\b[^>]*?\bd\s*=\s*["']([^"']*)["'][^>]*>/gi
+  const allCmds = []
+  let pm
+  while ((pm = pathRe.exec(svg)) !== null) {
+    const d = pm[1].replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+    if (!d.trim()) continue
+    if (!/[LCQASTZ]/i.test(d)) continue
+    const cmds = parsePathCommands(d)
+    if (cmds.length) allCmds.push(...cmds)
+  }
+  return allCmds
+}
+
+// 内部共享：把命令序列渲染为标准 SVG（viewBox 0 0 1000 1000，坐标缩放并居中，width/height=size）
+// 无有效宽高（w/h ≤ 0）时返回 null，由调用方按"无轮廓"处理
+function renderNormalizedSvg(allCmds, size) {
+  const bb = pathBBox(allCmds)
+  const w = bb.maxX - bb.minX
+  const h = bb.maxY - bb.minY
+  if (!(w > 0) || !(h > 0)) return null
+  const scale = 1000 / Math.max(w, h)
+  const offsetX = (1000 - w * scale) / 2 - bb.minX * scale
+  const offsetY = (1000 - h * scale) / 2 - bb.minY * scale
+  const newD = commandsToPathData(allCmds, scale, offsetX, offsetY)
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="${size}" height="${size}"><path d="${newD}" fill="currentColor"/></svg>`
+}
 
 // 将任意 SVG 字符串规范化为标准 SVG（viewBox 0 0 1000 1000，大写绝对命令，坐标归一化）
 // 返回 { svg, changed }，changed 表示是否发生了转换
-// 用正则提取 path（不依赖 DOMParser，浏览器/Node 行为一致）
 export function normalizeSvgImport(svg, size = 512) {
   try {
     const s = String(svg)
-    // 提取所有 <path ... d="..."> 的 d 属性（精确匹配，避免 id= 干扰）
-    const pathRe = /<path\b[^>]*?\bd\s*=\s*["']([^"']*)["'][^>]*>/gi
-    const allCmds = []
-    let pm
-    while ((pm = pathRe.exec(s)) !== null) {
-      const d = pm[1].replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
-      if (!d.trim()) continue
-      // 过滤孤立单点 path（如 Illustrator 导出的 M320,256 这类只有 moveTo、无轮廓的点），
-      // 否则它们会被计入 bbox 拉大整体范围，导致真实图标被缩小/偏移
-      if (!/[LCQASTZ]/i.test(d)) continue
-      const cmds = parsePathCommands(d)
-      if (cmds.length) allCmds.push(...cmds)
-    }
+    const allCmds = collectPathCommands(s)
     if (!allCmds.length) return { svg, changed: false }
 
     // 幂等判定：bbox 已在 0~1000 范围内（允许 ±1 容差）且命令全大写 → 已规范，直接 unchanged。
@@ -311,17 +330,27 @@ export function normalizeSvgImport(svg, size = 512) {
       return { svg, changed: false } // 已规范：原样保留，不重写（幂等）
     }
 
-    // 需要归一化：缩放到 1000 内并居中（w/h 已在上面定义）
-    if (!(w > 0) || !(h > 0)) return { svg, changed: false }
-
-    const scale = 1000 / Math.max(w, h)
-    const offsetX = (1000 - w * scale) / 2 - bb.minX * scale
-    const offsetY = (1000 - h * scale) / 2 - bb.minY * scale
-    const newD = commandsToPathData(allCmds, scale, offsetX, offsetY)
-
-    const clean = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="${size}" height="${size}"><path d="${newD}" fill="currentColor"/></svg>`
+    // 需要归一化：缩放到 1000 内并居中
+    const clean = renderNormalizedSvg(allCmds, size)
+    if (!clean) return { svg, changed: false }
     return { svg: clean, changed: true }
   } catch {
     return { svg, changed: false }
+  }
+}
+
+// 强制归一化（位图矢量化输出专用，见 lib/traceImage.js）：
+// normalizeSvgImport 的幂等判定会放行 300~1000 像素之间的输入（如 potrace 的 512px 输出），
+// 但项目图标规范是 0~1000 全幅坐标系（字体构建按此缩放字形），像素坐标必须强制重算居中放大。
+// 返回 { svg, changed }：svg=null 表示没有可追踪的 path 轮廓（调用方应提示用户）
+export function normalizeSvgForce(svg, size = 512) {
+  try {
+    const allCmds = collectPathCommands(String(svg))
+    if (!allCmds.length) return { svg: null, changed: false }
+    const clean = renderNormalizedSvg(allCmds, size)
+    if (!clean) return { svg: null, changed: false }
+    return { svg: clean, changed: true }
+  } catch {
+    return { svg: null, changed: false }
   }
 }
