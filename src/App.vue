@@ -48,6 +48,23 @@ const showParser = ref(false)
 const showImport = ref(false)
 const showImageToSvg = ref(false)
 const showSettings = ref(false)
+// 图片转 SVG 弹窗的替换目标：非空 = 替换模式（从图标卡片「替换」进入），空 = 常规导入
+const replaceTarget = ref(null)
+
+function openImageToSvg() {
+  replaceTarget.value = null
+  showImageToSvg.value = true
+}
+
+function openReplaceImageToSvg(icon) {
+  replaceTarget.value = { id: icon.id, name: icon.name }
+  showImageToSvg.value = true
+}
+
+function closeImageToSvg() {
+  showImageToSvg.value = false
+  replaceTarget.value = null
+}
 
 // 搜索（#1：默认隐藏，按钮展开）
 const keyword = ref('')
@@ -177,7 +194,7 @@ async function exportProject() {
         <button @click="showSettings = true" title="项目名称/CSS前缀/字体名/SVG尺寸">设置</button>
         <DropdownMenu label="导入" title="导入 SVG / 图片转 SVG / 解析字体" :open="importOpen" @update:open="setImportOpen">
           <button @click="showImport = true">导入 SVG</button>
-          <button @click="showImageToSvg = true">图片转 SVG</button>
+          <button @click="openImageToSvg">图片转 SVG</button>
           <button @click="showParser = true">解析字体</button>
         </DropdownMenu>
         <!-- 导出下拉：整个按钮为主色主操作(导出)，下载项目为普通菜单项 -->
@@ -223,6 +240,7 @@ async function exportProject() {
           const idx = selectedIds.indexOf(id)
           idx >= 0 ? selectedIds.splice(idx, 1) : selectedIds.push(id)
         }"
+        @replace="openReplaceImageToSvg"
       />
       <!-- 首次打开/无图标时的引导提示（替代"没有匹配的图标"，引导用户导入或解析） -->
       <div v-if="!store.count" class="empty">
@@ -236,7 +254,7 @@ async function exportProject() {
 
     <FontParser v-if="showParser" @close="showParser = false" />
     <ImportModal v-if="showImport" @close="showImport = false" />
-    <ImageToSvgModal v-if="showImageToSvg" @close="showImageToSvg = false" />
+    <ImageToSvgModal v-if="showImageToSvg" :replace-target="replaceTarget" @close="closeImageToSvg" />
     <SettingsModal v-if="showSettings" @close="showSettings = false" />
   </div>
 </template>

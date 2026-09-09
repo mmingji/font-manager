@@ -9,7 +9,7 @@ const props = defineProps({
   selectedIds: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['toggle-select'])
+const emit = defineEmits(['toggle-select', 'replace'])
 const store = useProjectStore()
 
 const groups = computed(() => groupIcons(props.icons))
@@ -46,6 +46,7 @@ function scrollToGroup(key) {
             :select-mode="selectMode"
             :selected="selectedIds.includes(icon.id)"
             @toggle-select="emit('toggle-select', icon.id)"
+            @replace="emit('replace', icon)"
           />
         </div>
       </section>

@@ -17,6 +17,9 @@ import { normalizeSvgForce } from './svgNormalize'
 export const MAX_EDGE = 1024
 // 灰度阈值默认值：亮度 < 阈值判定为前景（深色图形）。白底深色图标是主流场景
 export const DEFAULT_THRESHOLD = 128
+// 去噪点默认值（映射 potrace turdsize）：面积小于该值的孤立色块被忽略。
+// 源图扫描噪点/杂点多时可调大；线稿细节多（如细线与点）宜调小保留
+export const DEFAULT_TURDSIZE = 2
 
 // potrace 算法参数（图标场景经验值，固定不开放 UI；如需可后续暴露成滑杆）
 // turdsize:  面积小于该值的孤立噪点丛被忽略。=2 在"去扫描噪点"与"保留细节"间平衡
@@ -76,34 +79,41 @@ async function decodeToCanvas(file, maxEdge = MAX_EDGE) {
 //   1. alpha < 128 的像素视为透明背景 → 置白（透明底 PNG 自动"抠图"，透明区域不产生轮廓）
 //   2. 其余按灰度亮度：默认 亮度 < threshold → 前景黑；≥ threshold → 背景白
 //   3. invert 反色：反转亮度判定（暗底亮形状的图勾反色后，形状才成为前景）
+// 方向修正：potrace wasm 输出 y 轴与屏幕相反（位图首行被当作底部），
+// 实测结果上下翻转——因此喂入前对位图做垂直镜像，追踪输出即恢复正确方向（2026-09 实测验证）
 export function toBinaryImageData(imageData, threshold = DEFAULT_THRESHOLD, invert = false) {
   const { data, width, height } = imageData
   const out = new Uint8ClampedArray(data.length)
-  for (let i = 0; i < data.length; i += 4) {
-    const a = data[i + 3]
-    const r = data[i]
-    const g = data[i + 1]
-    const b = data[i + 2]
-    let black
-    if (a < 128) {
-      black = false
-    } else {
-      const lum = 0.299 * r + 0.587 * g + 0.114 * b // 标准灰度加权（人眼感知）
-      black = invert ? lum >= threshold : lum < threshold
+  for (let row = 0; row < height; row++) {
+    const srcRow = height - 1 - row // 垂直镜像：源底行 → 输出顶行
+    for (let col = 0; col < width; col++) {
+      const si = (srcRow * width + col) * 4
+      const oi = (row * width + col) * 4
+      const a = data[si + 3]
+      const r = data[si]
+      const g = data[si + 1]
+      const b = data[si + 2]
+      let black
+      if (a < 128) {
+        black = false
+      } else {
+        const lum = 0.299 * r + 0.587 * g + 0.114 * b // 标准灰度加权（人眼感知）
+        black = invert ? lum >= threshold : lum < threshold
+      }
+      const v = black ? 0 : 255
+      out[oi] = v
+      out[oi + 1] = v
+      out[oi + 2] = v
+      out[oi + 3] = 255
     }
-    const v = black ? 0 : 255
-    out[i] = v
-    out[i + 1] = v
-    out[i + 2] = v
-    out[i + 3] = 255
   }
   return new ImageData(out, width, height)
 }
 
 // 单张图片文件 → 项目标准 SVG 字符串（viewBox 0 0 1000 1000 + width/height=size + fill=currentColor）
-// options: { threshold: 亮度阈值 0~255, invert: 反色, size: 输出 svg 宽高（取项目设置 store.svgSize） }
+// options: { threshold: 亮度阈值 0~255, invert: 反色, turdsize: 去噪点 0~20, size: 输出 svg 宽高（取项目设置 store.svgSize） }
 // 异常：无轮廓（图全白/全透明/全黑但反色错误等）抛 { code: 'EMPTY_TRACE' }，调用方据此提示
-export async function imageFileToSvg(file, { threshold = DEFAULT_THRESHOLD, invert = false, size = 512 } = {}) {
+export async function imageFileToSvg(file, { threshold = DEFAULT_THRESHOLD, invert = false, turdsize = DEFAULT_TURDSIZE, size = 512 } = {}) {
   await ensurePotraceReady()
   const { ctx, width, height } = await decodeToCanvas(file)
   const imageData = ctx.getImageData(0, 0, width, height)
@@ -111,7 +121,7 @@ export async function imageFileToSvg(file, { threshold = DEFAULT_THRESHOLD, inve
   // potrace 输出：以像素坐标为 viewBox 的完整 svg（含 <path fill="#000000">）
   // 尺寸 300~1000px 的中间态会被 normalizeSvgImport 误判"已规范"而漏缩放，
   // 因此必须走 normalizeSvgForce（强制缩放居中到 0~1000 全幅）——见该函数注释
-  const raw = await potrace(binary, POTRACE_OPTIONS)
+  const raw = await potrace(binary, { ...POTRACE_OPTIONS, turdsize })
   const { svg } = normalizeSvgForce(raw, size)
   if (!svg) {
     const err = new Error('未追踪到任何轮廓：图片可能全白/全透明，或需要勾选反色')

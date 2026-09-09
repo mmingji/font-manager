@@ -1,8 +1,6 @@
 <script setup>
 import { ref, computed, nextTick } from 'vue'
 import { useProjectStore } from '../store/project'
-import { normalizeSvgImport } from '../lib/svgNormalize'
-import { imageFileToSvg, isBitmapFile } from '../lib/traceImage'
 
 const props = defineProps({
   icon: { type: Object, required: true },
@@ -10,14 +8,13 @@ const props = defineProps({
   selected: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['toggle-select'])
+const emit = defineEmits(['toggle-select', 'replace'])
 
 const store = useProjectStore()
 
 const editing = ref(false)
 const editName = ref('')
 const inputEl = ref(null)
-const svgFileInput = ref(null)
 
 // #12：显示 unicode 码位（hex 大写）
 const codeHex = computed(() => {
@@ -50,34 +47,7 @@ function cancelEdit() {
   editing.value = false
 }
 
-// #2：替换 SVG
-function pickSvg() {
-  svgFileInput.value?.click()
-}
-
-async function onSvgSelected(e) {
-  const file = e.target.files?.[0]
-  e.target.value = ''
-  if (!file) return
-  try {
-    if (isBitmapFile(file)) {
-      // 图片文件：矢量化后替换（此处无参数 UI，用默认阈值/无反色；
-      // 需要阈值/反色调节的场景请走顶部「导入▾ → 图片转 SVG」，入库后再删除旧图标）
-      const clean = await imageFileToSvg(file, { size: store.svgSize })
-      store.replaceSvg(props.icon.id, clean)
-      return
-    }
-    const text = await file.text()
-    const { svg: clean } = normalizeSvgImport(text, store.svgSize)
-    if (!clean || !clean.includes('<path')) {
-      alert('未找到有效的 SVG path 数据')
-      return
-    }
-    store.replaceSvg(props.icon.id, clean)
-  } catch (err) {
-    alert('替换失败：' + err.message)
-  }
-}
+// #2：替换图标 → 通知父组件打开「图片转 SVG」弹窗的替换模式（预览/调参后再替换）
 
 function remove() {
   if (confirm(`确认删除图标「${props.icon.name}」？`)) {
@@ -117,10 +87,9 @@ function remove() {
     <!-- #13：hover 时底部显示操作按钮 -->
     <div class="ops" v-if="!selectMode">
       <button class="op" title="重命名" @click="startEdit">改名</button>
-      <button class="op" title="替换 SVG" @click="pickSvg">替换</button>
+      <button class="op" title="替换 SVG（支持图片，转换后预览再替换）" @click="emit('replace', icon)">替换</button>
       <button class="op danger" title="删除" @click="remove">删除</button>
     </div>
-    <input ref="svgFileInput" type="file" accept=".svg,image/png,image/jpeg,image/webp,image/gif,image/bmp" hidden @change="onSvgSelected" />
   </div>
 </template>
 
