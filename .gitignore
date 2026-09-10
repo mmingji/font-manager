@@ -55,3 +55,7 @@ src/assets/
 
 # ===== 便携版打包产物（npm run pack 生成，可不入库） =====
 SnFont-便携版.zip
+
+# ===== 本地测试素材与解压产物（个人文件，不入库） =====
+test/
+SnFont/

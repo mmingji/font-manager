@@ -1,6 +1,6 @@
 // 字体文件解析：将 ttf/otf/woff/woff2 解析为统一尺寸的 SVG 文件
 // 引擎选型（重要）：opentype.js 解析 CFF/OTF 字体的紧凑曲线编码（vv/hv/vh/hvcurveto）
-// 存在控制点错位 bug——实测 Font Awesome 7 Pro 的细线圆环（内外圆半径比 72/56）
+// 存在控制点错位 bug——实测某商业图标字体的细线圆环（内外圆半径比 72/56）
 // 被解析成粗环（500/333），"只有单圆圈/单线条图标粗细大小不对"即此因（2026-09 排查实锤）。
 // fontkit（2.x，浏览器官方构建）对 CFF/TrueType 均正确，改为 fontkit 取轮廓。
 // 流程：woff2 → fonteditor wasm decode 成 ttf（无损，已验证）→ fontkit 解析
