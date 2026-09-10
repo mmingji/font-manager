@@ -52,3 +52,6 @@ svgs/
 
 # ===== 构建前由 scripts/sync-inline-assets.mjs 生成的资源副本（不入库） =====
 src/assets/
+
+# ===== 便携版打包产物（npm run pack 生成，可不入库） =====
+SnFont-便携版.zip
