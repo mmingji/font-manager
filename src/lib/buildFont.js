@@ -5,6 +5,7 @@ import fonteditor from 'fonteditor-core'
 // woff2 编码 wasm：同 parseFont（?url + 构建内联 dataURL，供 file:// 绿色版使用）
 import woff2WasmUrl from '../assets/woff2.wasm?url'
 import { normalizeSvgImport, parsePathCommands, pathBBox, commandsToPathData } from './svgNormalize.js'
+import { isNoncharacter, isNotdefName } from './codepointPlan.js'
 import { buildBaseGlyphXml } from './baseGlyphs.js'
 import { buildGsubTable, injectGsub } from './gsub.js'
 
@@ -101,10 +102,20 @@ export function buildTtfFont(icons, familyName = 'snfont', weight = 'regular') {
   const glyphsXml = [base.xml]
 
   // 2. 图标字形
+  const skipped = [] // 被防御性跳过的占位字形（仅告警，不进入字体）
   for (const icon of icons) {
     const name = String(icon.name || '').trim()
     if (!name) continue
     if (seen.has(name)) continue
+    // 防御性过滤（兼容旧项目数据）：
+    // · 名字为 .notdef：字体必备的缺字占位符（fonteditor 会自动创建 glyph 0），这里不能再塞一个；
+    // · 码位是非字符（U+FDD0–U+FDEF / U+*FFFE / U+*FFFF）：写进 SVG 字体的 XML 会让 fonteditor
+    //   解析中断，导致其后所有图标字形丢失（2026-09 实测：fa-brands 解析导入后导出只剩基础字形即此原因）
+    const rawCode = icon.code != null ? icon.code : null
+    if (isNotdefName(name) || isNoncharacter(rawCode)) {
+      skipped.push(name + (rawCode != null ? '(U+' + rawCode.toString(16).toUpperCase() + ')' : ''))
+      continue
+    }
     seen.add(name)
 
     // 稳定码位（#15）：图标分配后永久固定
@@ -131,6 +142,11 @@ export function buildTtfFont(icons, familyName = 'snfont', weight = 'regular') {
 ${glyphsXml.join('\n')}
 </font></defs>
 </svg>`
+
+  if (skipped.length) {
+    // 仅告警不阻断：被跳过的都是无意义的占位字形（.notdef / 非字符码位）
+    console.warn('[buildFont] 已跳过 ' + skipped.length + ' 个占位字形（不进入字体）：' + skipped.slice(0, 5).join(', ') + (skipped.length > 5 ? ' …' : ''))
+  }
 
   // 3. 构建 ttf
   const ttfObj = fonteditor.svg2ttfobject(svgFont, { combinePath: false })

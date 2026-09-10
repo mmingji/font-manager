@@ -6,6 +6,7 @@
 // 流程：woff2 → fonteditor wasm decode 成 ttf（无损，已验证）→ fontkit 解析
 import { create as fontkitCreate } from './fontkit-bundle.mjs'
 import fonteditor from 'fonteditor-core'
+import { isNoncharacter, isNotdefName } from './codepointPlan.js'
 // woff2 编解码 wasm：以 ?url 导入 → 构建时内联为 dataURL（file:// 下无法 fetch 外部文件）
 // 资源来源：构建前置脚本 scripts/sync-inline-assets.mjs 从 public/woff2.wasm 同步
 import woff2WasmUrl from '../assets/woff2.wasm?url'
@@ -156,6 +157,12 @@ export async function parseFontFile(file, size = 512) {
 
   for (const [gid, cp] of ordered) {
     const glyph = font.glyphForCodePoint(cp)
+    // 跳过 glyph 0（.notdef，字体必备的缺字占位符）与 Unicode 非字符码位：
+    // 这类字形不是图标；且非字符码位（如 U+FFFF）会写进字体构建的 XML，导致 fonteditor 解析中断、
+    // 其后所有图标字形丢失（2026-09 实测：fa-brands 解析导入后导出只剩基础字形）
+    if (gid === 0) continue
+    if (isNoncharacter(cp)) continue
+    if (isNotdefName(glyph.name)) continue
     // 无轮廓字形（如空格、组合用空字形）不作为图标导出
     const cmds = fontkitPathToCommands(glyph.path)
     const d = glyphToPathData(cmds, {

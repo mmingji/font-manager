@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { loadProject, saveProject, loadProjectFromIdb } from '../lib/persist.js'
 import { clampSvgToBox } from '../lib/svgNormalize.js'
 import { groupKeyOf, pinyinFullKey } from '../lib/pinyin.js'
-import { isInReserved, isBaseAscii, reservedUsage, RESERVED } from '../lib/codepointPlan.js'
+import { isInReserved, isBaseAscii, isNoncharacter, reservedUsage, RESERVED } from '../lib/codepointPlan.js'
 
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
@@ -191,7 +191,14 @@ export const useProjectStore = defineStore('project', {
         // 保持原码位命中内置基础 ASCII 区（字母/数字/符号）：这些码位必须留给内置字形，
         // 否则生成字体时 fonteditor 抛「Repeat unicode」导致整包失败 → 强制改自动分配
         const asciiBlocked = num != null && isBaseAscii(num)
-        const code = asciiBlocked
+        // 非字符码位（U+FDD0–U+FDEF / U+*FFFE / U+*FFFF）不能作为图标码位：
+        // 源字体常把 glyph 0（.notdef）映射到 U+FFFF，带进字体构建会让 fonteditor 解析中断、
+        // 其后图标字形全部丢失（见 buildFont 的防御性过滤注释）→ 这里直接改为自动分配
+        const noncharBlocked = num != null && !asciiBlocked && isNoncharacter(num)
+        if (noncharBlocked) {
+          codeAlerts.push('⚠️ ' + num.toString(16).toUpperCase().padStart(4, '0') + ' 是 Unicode 非字符码位（保留不用），已改为自动分配')
+        }
+        const code = asciiBlocked || noncharBlocked
           ? (() => {
               codeAlerts.push('⚠️ ' + num.toString(16).toUpperCase().padStart(4, '0') + ' 命中内置基础字符区（ASCII 0x20–0x7E），已改为自动分配码位（该区必须保留给字母/符号）')
               return this.allocateCode()
