@@ -2,10 +2,10 @@
 
 [简体中文](./README.md) | **English**
 
-[![Stars](https://img.shields.io/github/stars/mmingji/font-manager?style=flat-square&logo=github&label=stars)](https://github.com/mmingji/font-manager/stargazers)
-[![Release](https://img.shields.io/github/v/release/mmingji/font-manager?style=flat-square&label=release)](https://github.com/mmingji/font-manager/releases)
-[![Downloads](https://img.shields.io/github/downloads/mmingji/font-manager/total?style=flat-square&label=downloads)](https://github.com/mmingji/font-manager/releases)
-[![License](https://img.shields.io/github/license/mmingji/font-manager?style=flat-square&label=license)](./LICENSE)
+[![Stars](https://img.shields.io/github/stars/mmingji/sn-font-manager?style=flat-square&logo=github&label=stars)](https://github.com/mmingji/sn-font-manager/stargazers)
+[![Release](https://img.shields.io/github/v/release/mmingji/sn-font-manager?style=flat-square&label=release)](https://github.com/mmingji/sn-font-manager/releases)
+[![Downloads](https://img.shields.io/github/downloads/mmingji/sn-font-manager/total?style=flat-square&label=downloads)](https://github.com/mmingji/sn-font-manager/releases)
+[![License](https://img.shields.io/github/license/mmingji/sn-font-manager?style=flat-square&label=license)](./LICENSE)
 [![Vue](https://img.shields.io/badge/Vue-3-42b883?style=flat-square&logo=vuedotjs&logoColor=white)](https://vuejs.org)
 [![Vite](https://img.shields.io/badge/Vite-6-646CFF?style=flat-square&logo=vite&logoColor=white)](https://vitejs.dev)
 [![Chrome/Edge](https://img.shields.io/badge/Chrome%2FEdge-90%2B-4285F4?style=flat-square&logo=googlechrome&logoColor=white)](#browser-requirements)
@@ -14,7 +14,7 @@
 
 A pure front-end (zero-backend) font-icon manager: parse an existing font into uniformly sized SVG icons, curate an icon project (CRUD, grouping by initial letter, batch operations), and export two font sets (`snfont-regular` / `snfont-bold` — ttf / woff / woff2) with matching CSS. Fonts support **GSUB ligatures** — after installing, typing an icon name (e.g. `trash`) in any text field is replaced by the icon; icons can also be inserted from a character map by glyph name.
 
-**Portable build**: the production artifact is a **single index.html** — unzip and double-click, no installer, no server, no network. Download from [Releases](https://github.com/mmingji/font-manager/releases).
+**Portable build**: the production artifact is a **single index.html** — unzip and double-click, no installer, no server, no network. Download from [Releases](https://github.com/mmingji/sn-font-manager/releases).
 
 ## Features
 

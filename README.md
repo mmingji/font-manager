@@ -2,10 +2,10 @@
 
 **简体中文** | [English](./README.en.md)
 
-[![Stars](https://img.shields.io/github/stars/mmingji/font-manager?style=flat-square&logo=github&label=stars)](https://github.com/mmingji/font-manager/stargazers)
-[![Release](https://img.shields.io/github/v/release/mmingji/font-manager?style=flat-square&label=release)](https://github.com/mmingji/font-manager/releases)
-[![Downloads](https://img.shields.io/github/downloads/mmingji/font-manager/total?style=flat-square&label=downloads)](https://github.com/mmingji/font-manager/releases)
-[![License](https://img.shields.io/github/license/mmingji/font-manager?style=flat-square&label=license)](./LICENSE)
+[![Stars](https://img.shields.io/github/stars/mmingji/sn-font-manager?style=flat-square&logo=github&label=stars)](https://github.com/mmingji/sn-font-manager/stargazers)
+[![Release](https://img.shields.io/github/v/release/mmingji/sn-font-manager?style=flat-square&label=release)](https://github.com/mmingji/sn-font-manager/releases)
+[![Downloads](https://img.shields.io/github/downloads/mmingji/sn-font-manager/total?style=flat-square&label=downloads)](https://github.com/mmingji/sn-font-manager/releases)
+[![License](https://img.shields.io/github/license/mmingji/sn-font-manager?style=flat-square&label=license)](./LICENSE)
 [![Vue](https://img.shields.io/badge/Vue-3-42b883?style=flat-square&logo=vuedotjs&logoColor=white)](https://vuejs.org)
 [![Vite](https://img.shields.io/badge/Vite-6-646CFF?style=flat-square&logo=vite&logoColor=white)](https://vitejs.dev)
 [![Chrome/Edge](https://img.shields.io/badge/Chrome%2FEdge-90%2B-4285F4?style=flat-square&logo=googlechrome&logoColor=white)](#浏览器要求)
@@ -14,7 +14,7 @@
 
 一个纯前端（零后端）的字体图标管理应用：上传字体文件解析为统一尺寸的 SVG，管理图标项目（增删改查、按首字母分组、批量操作），一键生成 `snfont-regular` / `snfont-bold` 两套产物（ttf / woff / woff2）及配套 CSS。字体支持 **GSUB 连字**——安装后在文本里直接输入图标名（如 `trash`）即自动替换为对应图标；也可在字符映射表按字形名搜索插入。
 
-**绿色免安装版**：构建产物是**单个 index.html**，解压双击即用（无需安装、无需服务、不联网）。下载见 [Releases](https://github.com/mmingji/font-manager/releases)。
+**绿色免安装版**：构建产物是**单个 index.html**，解压双击即用（无需安装、无需服务、不联网）。下载见 [Releases](https://github.com/mmingji/sn-font-manager/releases)。
 
 ## 功能
 
