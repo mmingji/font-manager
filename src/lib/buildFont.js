@@ -2,6 +2,8 @@
 // 码位分配在 PUA 保留区（U+EE00–U+EFFF 512 个，避开参考映射已占用的 E000–E8CC / F000+），name 表写入图标名
 // GSUB 连字：输入图标名（如 trash）自动替换为图标字形
 import fonteditor from 'fonteditor-core'
+// woff2 编码 wasm：同 parseFont（?url + 构建内联 dataURL，供 file:// 绿色版使用）
+import woff2WasmUrl from '../assets/woff2.wasm?url'
 import { normalizeSvgImport, parsePathCommands, pathBBox, commandsToPathData } from './svgNormalize.js'
 import { buildBaseGlyphXml } from './baseGlyphs.js'
 import { buildGsubTable, injectGsub } from './gsub.js'
@@ -214,7 +216,7 @@ let woff2Ready = null
 // 初始化 woff2 wasm（浏览器端）
 export async function ensureWoff2Ready() {
   if (!woff2Ready) {
-    woff2Ready = fonteditor.woff2.init('./woff2.wasm')
+    woff2Ready = fonteditor.woff2.init(woff2WasmUrl)
   }
   await woff2Ready
 }

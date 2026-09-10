@@ -1,52 +1,41 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { VitePWA } from 'vite-plugin-pwa'
+import { viteSingleFile } from 'vite-plugin-singlefile'
 import { fileURLToPath, URL } from 'node:url'
 
+// 构建形态：绿色免安装版（dist/index.html 双击即用，file:// 协议）
+// 关键约束与对策（详见 README「离线运行」）：
+// 1) file:// 下 <script type="module"> 会被 CORS 拦截 → 产物用 IIFE（经典脚本，无 CORS）
+// 2) file:// 下 fetch 外部文件（wasm/json）被拦 → 以 dataURL 内联（assetsInlineLimit 放开）
+// 3) 不使用 Service Worker/PWA（file:// 下本就不可用），维持零依赖双击运行
 export default defineConfig({
-  plugins: [
-    vue(),
-    // PWA：manifest + Service Worker（workbox 预缓存构建产物），离线可打开、可安装到桌面/手机
-    // 构建时自动生成 sw.js/manifest.webmanifest；预缓存清单自动纳入后加的静态资源（重新 build 即可）
-    VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg'],
-      manifest: {
-        name: 'SnFont 图标管理',
-        short_name: 'SnFont',
-        description: '纯前端字体图标管理：导入 SVG / 图片转 SVG / 解析字体，一键生成 snfont 字体',
-        lang: 'zh-CN',
-        theme_color: '#3b82f6',
-        background_color: '#f5f6fa',
-        display: 'standalone',
-        start_url: './',
-        icons: [
-          { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'pwa-512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
-        ]
-      },
-      workbox: {
-        // 预缓存全部构建与静态产物（含 wasm/woff2 等离线能力依赖）
-        globPatterns: ['**/*.{js,css,html,svg,png,webmanifest,json,wasm,woff2,woff,ttf}'],
-        navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/api\//]
-      }
-    })
-  ],
+  // viteSingleFile：把 JS/CSS 全量内联进 index.html（file:// 下 <script type="module" src>
+  // 与 <link crossorigin> 都会被 CORS 拦截；内联后无外部引用，双击 index.html 即用）
+  plugins: [vue(), viteSingleFile()],
   base: './',
   resolve: {
     alias: {
-      // fontkit 统一使用 node 版构建（dist/module.mjs）：
-      // 浏览器官方构建（browser-module.mjs）在浏览器运行时对 CFF 紧凑曲线编码存在不稳定的
-      // 解析 bug（F6AA 细线圆环被时好时坏解析成粗环，实测 112/96/64 波动，2026-09 排查确认）；
-      // node 版稳定可靠（fontkit 2.0.4，node 端多轮验证一致）。
-      // 依赖替代：node 版的 brotli 引用指到 stub（项目 woff2 解码走 fonteditor wasm，不触发）
+      // fontkit 用 node 版构建（浏览器构建对 CFF 紧凑曲线有 bug，见 lib/parseFont.js 头部注释）
+      // 其 brotli 引用指到 stub（woff2 解码走 fonteditor wasm，不触发该路径）
       'fontkit': fileURLToPath(new URL('./node_modules/fontkit/dist/module.mjs', import.meta.url)),
       'brotli/decompress.js': fileURLToPath(new URL('./src/lib/brotli-stub.js', import.meta.url))
     }
   },
   build: {
-    chunkSizeWarningLimit: 1600
+    // 单文件 IIFE：经典脚本（可 file:// 直开），所有依赖内联
+    target: 'es2020',
+    cssCodeSplit: false,
+    assetsInlineLimit: 4 * 1024 * 1024, // wasm/JSON/svg 全部内联为 dataURL（4MB 上限覆盖 woff2.wasm 710KB）
+    chunkSizeWarningLimit: 8000,
+    rollupOptions: {
+      output: {
+        format: 'iife',
+        inlineDynamicImports: true,
+        // 固定文件名（便于双击分发与排查；hash 对本地绿色版无缓存收益）
+        entryFileNames: 'assets/app.js',
+        assetFileNames: 'assets/[name][extname]',
+        chunkFileNames: 'assets/[name].js'
+      }
+    }
   }
 })

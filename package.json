@@ -2,11 +2,12 @@
   "name": "snfont-manager",
   "version": "1.0.0",
   "private": true,
-  "description": "snfont 字体图标管理应用：上传字体解析为 SVG，管理图标项目，一键生成 snfont.ttf/woff/woff2",
+  "description": "snfont 字体图标管理应用：上传字体解析为 SVG，管理图标项目，一键生成 snfont.ttf/woff/woff2（绿色免安装版：双击 index.html 即用）",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "node scripts/sync-inline-assets.mjs && vite",
+    "build": "node scripts/sync-inline-assets.mjs && vite build",
+    "pack": "npm run build && node scripts/pack-portable.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -23,6 +24,6 @@
     "@vitejs/plugin-vue": "^5.2.1",
     "puppeteer-core": "^25.10.0",
     "vite": "^6.0.7",
-    "vite-plugin-pwa": "^1.3.0"
+    "vite-plugin-singlefile": "^2.3.3"
   }
 }

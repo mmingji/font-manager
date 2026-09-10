@@ -7,14 +7,28 @@
 
 // 加载内置映射表（从 public 静态资源；force=true 时绕过内存缓存重新拉取）
 // fetch 固定 cache:'no-cache'：确保打开/刷新页面时总是读取磁盘上的最新 unicode-map.json（不被浏览器 HTTP 缓存）
+// 绿色免安装版（file://）无法 fetch 外部文件：回退到构建时内联的 json 快照（dataURL）
+import mapJsonInline from '../assets/unicode-map.json?url'
 const MAP_URL = './unicode-map.json'
+
+// file://（绿色免安装版）下 fetch 本地文件必然被 CORS 拦截，直接走内联快照，避免无谓报错
+const isFileProtocol = typeof location !== 'undefined' && location.protocol === 'file:'
+async function fetchMapJson() {
+  if (!isFileProtocol) {
+    try {
+      const res = await fetch(MAP_URL, { cache: 'no-cache' })
+      if (res.ok) return await res.json()
+    } catch { /* 静态资源缺失等：回退内联快照 */ }
+  }
+  const res2 = await fetch(mapJsonInline)
+  return await res2.json()
+}
+
 let builtinCache = null
 export async function loadBuiltinMap(force = false) {
   if (builtinCache && !force) return builtinCache
   try {
-    const res = await fetch(MAP_URL, { cache: 'no-cache' })
-    if (!res.ok) return {}
-    const data = await res.json()
+    const data = await fetchMapJson()
     // 归一化为 { hexCode: name }
     const map = {}
     for (const [name, unicode] of Object.entries(data)) {

@@ -6,6 +6,9 @@
 // 流程：woff2 → fonteditor wasm decode 成 ttf（无损，已验证）→ fontkit 解析
 import { create as fontkitCreate } from './fontkit-bundle.mjs'
 import fonteditor from 'fonteditor-core'
+// woff2 编解码 wasm：以 ?url 导入 → 构建时内联为 dataURL（file:// 下无法 fetch 外部文件）
+// 资源来源：构建前置脚本 scripts/sync-inline-assets.mjs 从 public/woff2.wasm 同步
+import woff2WasmUrl from '../assets/woff2.wasm?url'
 
 const FONT_EXT = ['ttf', 'otf', 'woff', 'woff2']
 
@@ -24,7 +27,7 @@ function isWoff2Buffer(buffer) {
 let woff2Ready = null
 function ensureWoff2() {
   if (!woff2Ready) {
-    woff2Ready = fonteditor.woff2.init('./woff2.wasm')
+    woff2Ready = fonteditor.woff2.init(woff2WasmUrl)
   }
   return woff2Ready
 }

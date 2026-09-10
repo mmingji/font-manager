@@ -17,9 +17,9 @@
 | 码位规划    | 新增图标从 U+EE00–U+EFFF 保留区(512 个)顺序分配，避开参考字体已占区；allocateCode 双向跳过已占用                                                                                                                                |
 | 数据持久化   | IndexedDB 主存储 + localStorage 快照：数千图标不丢；写队列串行 + 刷新前同步兜底；启动 boot gate 避免大数据先空白                                                                                                                     |
 | 启动自检    | 按需检测异常 SVG 坐标（越界→归一化 0~1000）；仅确有异常才提示修复进度，正常数据完全静默（幂等）                                                                                                                                           |
-| 离线运行    | `启动服务.bat` 起本地服务开浏览器 http://localhost:2333，`关闭服务.bat` 停止                                                                                                                                         |
+| 离线运行    | 绿色版：双击 dist/index.html 即用（零服务零联网）；如需 HTTP 部署仍可用任意静态托管（dist/ 亦可） |
 | 图片转 SVG | 拖入/多选位图 → potrace(WASM) 矢量化（阈值/反色/去噪点实时调参自动重转）→ 按项目 SVG 尺寸大预览 + 网格（改名/勾选/单张下载/下载全部）→ 导入；图标卡「替换」走同一弹窗（预览后替换，支持 svg 文件）                                                                            |
-| PWA 支持     | manifest + Service Worker 离线缓存（vite-plugin-pwa/workbox）：构建产物全量预缓存，离线二次打开秒开；满足安装条件时顶栏出现「安装」按钮（桌面/手机可安装，应用图标为 Sn 字形蓝底图标） |
+| 绿色免安装版   | 构建产物为**单个 index.html**（JS/CSS/wasm/映射表全部内联）：解压后双击即用，无需安装、无需启动服务、不联网；`npm run pack` 一键打包成 SnFont-便携版.zip |
 
 ## 技术栈
 
@@ -29,7 +29,7 @@
 - 自研 GSUB 生成器：连字表(lookup type 4)手写二进制注入
 - JSZip + file-saver：zip 打包下载
 - esm-potrace-wasm：位图矢量化（图片转 SVG）。GPL-2.0 许可说明：本地/内网自用无分发义务；输出的图标/字体是数据不受传染；若未来闭源商用分发整个应用，需更换为宽松许可库（改动面仅在 src/lib/traceImage.js 内部）
-- vite-plugin-pwa：PWA 支持（manifest + Workbox 离线预缓存 + 安装提示）
+- vite-plugin-singlefile：构建单文件 HTML（把 JS/CSS 内联进 index.html，使 file:// 双击可用）
 
 ## 快速开始
 
@@ -45,7 +45,14 @@ npm run build      # 构建到 dist/
 
 ### 本地运行（离线、双击）
 
-构建 dist 后双击 `启动服务.bat` → 起本地服务并打开 http://localhost:2333；`关闭服务.bat` 停止。
+**绿色免安装版**：`npm run pack` → 生成 `SnFont-便携版.zip`（约 1.25MB），解压后**双击 `SnFont/index.html` 即用**——
+无需安装、无需启动服务、不联网（构建产物是单个 HTML，JS/CSS/woff2.wasm/映射表全部内联；file:// 下
+`type="module"` 与 fetch 外部文件都会被 CORS 拦截，故用 IIFE + dataURL 内联，见 vite.config.js 注释）。
+
+推荐 Chrome / Edge（Firefox 对 file:// 的数据存储限制较严）。数据存在浏览器本地（与 file:// 绑定）：
+换机器或清理浏览器数据前，用「导出 ▾ → 下载项目」保存备份，新环境「导入 ▾ → 导入 SVG」恢复。
+
+（开发预览也可 `npm run preview` 起本地静态服务；HTTP 部署直接用 dist/ 即可。）
 
 ## 部署
 

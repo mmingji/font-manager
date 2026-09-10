@@ -1,7 +1,21 @@
 // 参考字体映射占用动态统计
 // 页面刷新/打开时调用 computeReferenceOccupancy(true)，强制重新读取 public/unicode-map.json，
 // 基于最新映射内容重新分析各码位段占用情况（不依赖静态 json，保证刷新即最新）
+import mapJsonInline from '../assets/unicode-map.json?url'
 const MAP_URL = './unicode-map.json'
+
+// 绿色免安装版（file://）下 fetch 本地文件必然被 CORS 拦截：直接走内联快照
+const isFileProtocol = typeof location !== 'undefined' && location.protocol === 'file:'
+async function fetchMapJson() {
+  if (!isFileProtocol) {
+    try {
+      const res = await fetch(MAP_URL, { cache: 'no-cache' })
+      if (res.ok) return await res.json()
+    } catch { /* 静态资源缺失等：回退内联快照 */ }
+  }
+  const res2 = await fetch(mapJsonInline)
+  return await res2.json()
+}
 
 // 分析 unicode-map.json 的原始数据（扁平或嵌套都兼容）：返回 { codeSet, total }
 function parseOccupied(raw) {
@@ -44,9 +58,7 @@ let lastStats = null
 export async function computeReferenceOccupancy(force = false) {
   if (lastStats && !force) return lastStats
   try {
-    const res = await fetch(MAP_URL, { cache: 'no-cache' })
-    if (!res.ok) return null
-    const raw = await res.json()
+    const raw = await fetchMapJson()
     const { set } = parseOccupied(raw)
     lastStats = analyzeOccupancy(set)
     return lastStats
