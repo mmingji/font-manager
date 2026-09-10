@@ -305,6 +305,19 @@ function renderNormalizedSvg(allCmds, size) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="${size}" height="${size}"><path d="${newD}" fill="currentColor"/></svg>`
 }
 
+// 解析 svg 的 viewBox → { minX, minY, w, h }；无 viewBox 或格式异常返回 null
+// 用途：判断这个 svg 是否已经处于"本项目坐标系"（viewBox 0 0 1000 1000）。
+// 关键：判断"要不要缩放"必须看 viewBox 坐标系，而不是图形 bbox 的大小——
+// 1000 坐标系里绘制的小图形（如字体解析出的 wifi-weak 小圆圈，宽高仅约 187）本来就是小的，
+// 若按 bbox 判定会被当成"像素小图"放大，导致导出后再导入失真（用户实测反馈）。
+function parseViewBox(svg) {
+  const m = String(svg).match(/viewBox\s*=\s*["']([^"']*)["']/i)
+  if (!m) return null
+  const nums = m[1].trim().split(/[\s,]+/).map(Number)
+  if (nums.length !== 4 || nums.some((n) => !isFinite(n)) || nums[2] <= 0 || nums[3] <= 0) return null
+  return { minX: nums[0], minY: nums[1], w: nums[2], h: nums[3] }
+}
+
 // 将任意 SVG 字符串规范化为标准 SVG（viewBox 0 0 1000 1000，大写绝对命令，坐标归一化）
 // 返回 { svg, changed }，changed 表示是否发生了转换
 export function normalizeSvgImport(svg, size = 512) {
@@ -326,11 +339,23 @@ export function normalizeSvgImport(svg, size = 512) {
     const tiny = w < 300 && h < 300 // 宽高都极小才视为像素位图需放大；扁平宽图(h小但w≈1000)不算
     const alreadyNormal = inside && !tiny
 
+    // 已处于本项目坐标系（viewBox 0 0 1000 1000）：
+    // 原样保留，仅在坐标越界时做"收缩 + 平移入框"（clampSvgToBox 绝不放大）——
+    // 保证"导出 SVG → 再导入"完全保真，也让 em 基准的小图标保持原始尺寸
+    const vb = parseViewBox(s)
+    const sameCoordSystem = !!vb &&
+      Math.abs(vb.minX) < 1 && Math.abs(vb.minY) < 1 &&
+      Math.abs(vb.w - 1000) < 1 && Math.abs(vb.h - 1000) < 1
+    if (sameCoordSystem) {
+      if (inside && allUpper) return { svg, changed: false }
+      return clampSvgToBox(s, size)
+    }
+
     if (alreadyNormal && allUpper) {
       return { svg, changed: false } // 已规范：原样保留，不重写（幂等）
     }
 
-    // 需要归一化：缩放到 1000 内并居中
+    // 需要归一化：缩放到 1000 内并居中（viewBox 非 1000 坐标系，或缺少 viewBox 的像素小图）
     const clean = renderNormalizedSvg(allCmds, size)
     if (!clean) return { svg, changed: false }
     return { svg: clean, changed: true }
