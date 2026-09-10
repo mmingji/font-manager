@@ -45,15 +45,16 @@ function escapeXml(s) {
   })
 }
 
-// fontkit Path 命令 → 通用命令序列（y 翻转：字体内部坐标 y 向上 → SVG y 向下）
+// fontkit Path 命令 → 通用命令序列（保留字体内部坐标：y 向上、baseline=0）
+// y 翻转与 em 归一化统一在 glyphToPathData 中处理，避免两处坐标变换互相干扰
 function fontkitPathToCommands(pathCmd) {
   const out = []
   for (const c of pathCmd.commands) {
     switch (c.command) {
-      case 'moveTo': out.push({ type: 'M', x: c.args[0], y: -c.args[1] }); break
-      case 'lineTo': out.push({ type: 'L', x: c.args[0], y: -c.args[1] }); break
-      case 'bezierCurveTo': out.push({ type: 'C', x1: c.args[0], y1: -c.args[1], x2: c.args[2], y2: -c.args[3], x: c.args[4], y: -c.args[5] }); break
-      case 'quadraticCurveTo': out.push({ type: 'Q', x1: c.args[0], y1: -c.args[1], x: c.args[2], y: -c.args[3] }); break
+      case 'moveTo': out.push({ type: 'M', x: c.args[0], y: c.args[1] }); break
+      case 'lineTo': out.push({ type: 'L', x: c.args[0], y: c.args[1] }); break
+      case 'bezierCurveTo': out.push({ type: 'C', x1: c.args[0], y1: c.args[1], x2: c.args[2], y2: c.args[3], x: c.args[4], y: c.args[5] }); break
+      case 'quadraticCurveTo': out.push({ type: 'Q', x1: c.args[0], y1: c.args[1], x: c.args[2], y: c.args[3] }); break
       case 'closePath': out.push({ type: 'Z' }); break
       default: break
     }
@@ -61,43 +62,51 @@ function fontkitPathToCommands(pathCmd) {
   return out
 }
 
-// 将命令序列转换为 svg path 数据（归一化到 0~1000 的 viewBox 内）
-function glyphToPathData(cmds) {
+// 将命令序列转换为 svg path 数据
+// **按 em 方格（unitsPerEm）缩放，保留字形在字体中的原始尺寸与位置**——
+// 不能按各自 bbox 放大到满格：那会把"小图形"（如 wifi-weak 的小圆圈，实测仅占 em 的 18.75%）
+// 强行放大成满格大圆，与字体设计意图和其他图标的大小关系都不符（2026-09 用户实测反馈）
+// 坐标映射：x 先按字符格(advanceWidth)居中，再 typeface 坐标 × scale；
+//          y 由字体坐标（向上，baseline=0）翻转为 SVG 坐标（向下）：ascender → 0、baseline → ascender×scale
+// metrics: { unitsPerEm, ascender, advanceWidth }
+function glyphToPathData(cmds, metrics = {}) {
   if (!cmds.length) return ''
+  const unitsPerEm = metrics.unitsPerEm || 1000
+  const ascender = metrics.ascender != null ? metrics.ascender : unitsPerEm * 0.8
+  const advanceWidth = metrics.advanceWidth != null ? metrics.advanceWidth : unitsPerEm
+  const s = 1000 / unitsPerEm
+  const ox = (1000 - advanceWidth * s) / 2 // 字符格在 1000 视框内居中
 
-  // 第一遍：计算所有点的 bbox（命令坐标已 y 翻转，y 向下）
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  // bbox（字体坐标）用于"轻量平移防出框"（只平移不缩放，保持尺寸真实）
+  let fMinX = Infinity, fMinY = Infinity, fMaxX = -Infinity, fMaxY = -Infinity
   const collect = (x, y) => {
-    if (x < minX) minX = x
-    if (x > maxX) maxX = x
-    if (y < minY) minY = y
-    if (y > maxY) maxY = y
+    if (x < fMinX) fMinX = x
+    if (x > fMaxX) fMaxX = x
+    if (y < fMinY) fMinY = y
+    if (y > fMaxY) fMaxY = y
   }
   for (const c of cmds) {
     switch (c.type) {
-      case 'M':
-      case 'L':
-        collect(c.x, c.y); break
-      case 'C':
-        collect(c.x1, c.y1); collect(c.x2, c.y2); collect(c.x, c.y); break
-      case 'Q':
-        collect(c.x1, c.y1); collect(c.x, c.y); break
+      case 'M': case 'L': collect(c.x, c.y); break
+      case 'C': collect(c.x1, c.y1); collect(c.x2, c.y2); collect(c.x, c.y); break
+      case 'Q': collect(c.x1, c.y1); collect(c.x, c.y); break
     }
   }
-  if (!isFinite(minX) || !isFinite(minY)) return ''
+  if (!isFinite(fMinX) || !isFinite(fMinY)) return ''
+  if (fMaxX - fMinX <= 0 && fMaxY - fMinY <= 0) return ''
 
-  const w = maxX - minX
-  const h = maxY - minY
-  if (w <= 0 || h <= 0) return ''
+  // 映射后的 bbox，计算需要的平移量（把边界压回 0~1000，避免出框被裁）
+  const x0 = fMinX * s + ox, x1 = fMaxX * s + ox
+  const y0 = (ascender - fMaxY) * s, y1 = (ascender - fMinY) * s
+  let shiftX = 0, shiftY = 0
+  if (x0 < 0) shiftX = -x0
+  else if (x1 > 1000) shiftX = 1000 - x1
+  if (y0 < 0) shiftY = -y0
+  else if (y1 > 1000) shiftY = 1000 - y1
 
-  // 等比缩放使最长边 = 1000，并居中
-  const s = 1000 / Math.max(w, h)
-  const ox = (1000 - w * s) / 2 - minX * s
-  const oy = (1000 - h * s) / 2 - minY * s
-  const tx = (x) => +(x * s + ox).toFixed(2)
-  const ty = (y) => +(y * s + oy).toFixed(2)
+  const tx = (x) => +(x * s + ox + shiftX).toFixed(2)
+  const ty = (y) => +((ascender - y) * s + shiftY).toFixed(2)
 
-  // 第二遍：生成归一化后的 path 数据
   let d = ''
   for (const c of cmds) {
     switch (c.type) {
@@ -137,7 +146,11 @@ export async function parseFontFile(file, size = 512) {
     const glyph = font.glyphForCodePoint(cp)
     // 无轮廓字形（如空格、组合用空字形）不作为图标导出
     const cmds = fontkitPathToCommands(glyph.path)
-    const d = glyphToPathData(cmds)
+    const d = glyphToPathData(cmds, {
+      unitsPerEm: font.unitsPerEm,
+      ascender: font.ascent, // fontkit 2.x：font.ascent（em 顶部到 baseline 的距离）
+      advanceWidth: glyph.advanceWidth
+    })
     if (!d) continue
 
     // 命名：优先 glyph 名（CFF CharStrings 名，如 wifi-weak）；无名字时用 uniXXXX 兜底
