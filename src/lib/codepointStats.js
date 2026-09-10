@@ -2,17 +2,20 @@
 // 页面刷新/打开时调用 computeReferenceOccupancy(true)，强制重新读取 public/unicode-map.json，
 // 基于最新映射内容重新分析各码位段占用情况（不依赖静态 json，保证刷新即最新）
 import mapJsonInline from '../assets/unicode-map.json?url'
+import { loadDataScript } from './loadDataScript.js'
 const MAP_URL = './unicode-map.json'
 
-// 绿色免安装版（file://）下 fetch 本地文件必然被 CORS 拦截：直接走内联快照
+// 数据来源优先级同 lib/unicodeMap.js：HTTP fetch json → file:// 用 data.js 全局数据 → 构建内联快照兜底
 const isFileProtocol = typeof location !== 'undefined' && location.protocol === 'file:'
 async function fetchMapJson() {
   if (!isFileProtocol) {
     try {
       const res = await fetch(MAP_URL, { cache: 'no-cache' })
       if (res.ok) return await res.json()
-    } catch { /* 静态资源缺失等：回退内联快照 */ }
+    } catch { /* 继续回退 */ }
   }
+  const fromScript = await loadDataScript('unicode-map.data.js', '__SNFONT_UNICODE_MAP__')
+  if (fromScript) return fromScript
   const res2 = await fetch(mapJsonInline)
   return await res2.json()
 }

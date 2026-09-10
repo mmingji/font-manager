@@ -98,17 +98,26 @@ function glyphToPathData(cmds, metrics = {}) {
   if (!isFinite(fMinX) || !isFinite(fMinY)) return ''
   if (fMaxX - fMinX <= 0 && fMaxY - fMinY <= 0) return ''
 
-  // 映射后的 bbox，计算需要的平移量（把边界压回 0~1000，避免出框被裁）
-  const x0 = fMinX * s + ox, x1 = fMaxX * s + ox
-  const y0 = (ascender - fMaxY) * s, y1 = (ascender - fMinY) * s
+  // —— 溢出保护（两步）——
+  // ① 字形比 em 方格还大（出血字形）：等比收缩到刚好放入 1000 视框（只缩不放，保完整不裁切）
+  // ② 收缩后仍偏出视框：整体平移回框内（只平移不改尺寸）
+  // 注意：① 必须存在——仅靠平移无法容纳"宽度 > 视框"的字形，会把对侧裁掉（用户实测反馈）
+  const rawX0 = fMinX * s + ox, rawX1 = fMaxX * s + ox
+  const rawY0 = (ascender - fMaxY) * s, rawY1 = (ascender - fMinY) * s
+  const rawW = rawX1 - rawX0
+  const rawH = rawY1 - rawY0
+  const shrink = Math.min(1, 1000 / Math.max(rawW, 1000), 1000 / Math.max(rawH, 1000))
+  // 以字形 bbox 左上角为锚点做收缩，再统一平移
+  const sx = (v) => v * shrink
+  let x0 = sx(rawX0), x1 = sx(rawX1), y0 = sx(rawY0), y1 = sx(rawY1)
   let shiftX = 0, shiftY = 0
   if (x0 < 0) shiftX = -x0
-  else if (x1 > 1000) shiftX = 1000 - x1
+  if (x1 + shiftX > 1000) shiftX = 1000 - x1
   if (y0 < 0) shiftY = -y0
-  else if (y1 > 1000) shiftY = 1000 - y1
+  if (y1 + shiftY > 1000) shiftY = 1000 - y1
 
-  const tx = (x) => +(x * s + ox + shiftX).toFixed(2)
-  const ty = (y) => +((ascender - y) * s + shiftY).toFixed(2)
+  const tx = (x) => +((x * s + ox) * shrink + shiftX).toFixed(2)
+  const ty = (y) => +(((ascender - y) * s) * shrink + shiftY).toFixed(2)
 
   let d = ''
   for (const c of cmds) {

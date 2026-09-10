@@ -9,17 +9,25 @@
 // fetch 固定 cache:'no-cache'：确保打开/刷新页面时总是读取磁盘上的最新 unicode-map.json（不被浏览器 HTTP 缓存）
 // 绿色免安装版（file://）无法 fetch 外部文件：回退到构建时内联的 json 快照（dataURL）
 import mapJsonInline from '../assets/unicode-map.json?url'
+import { loadDataScript } from './loadDataScript.js'
 const MAP_URL = './unicode-map.json'
 
-// file://（绿色免安装版）下 fetch 本地文件必然被 CORS 拦截，直接走内联快照，避免无谓报错
+// 数据来源优先级：
+// 1) HTTP 部署：fetch './unicode-map.json'（改 public 下 json 后刷新即生效）
+// 2) file://（绿色免安装版）：读取 index.html 引入的 unicode-map.data.js 提供的全局数据
+//    （浏览器禁止 file:// fetch，故用经典 script 承载；用户直接编辑该文件保存后刷新即生效）
+// 3) 兜底：构建时内联的快照
 const isFileProtocol = typeof location !== 'undefined' && location.protocol === 'file:'
 async function fetchMapJson() {
   if (!isFileProtocol) {
     try {
       const res = await fetch(MAP_URL, { cache: 'no-cache' })
       if (res.ok) return await res.json()
-    } catch { /* 静态资源缺失等：回退内联快照 */ }
+    } catch { /* 静态资源缺失等：继续回退 */ }
   }
+  // file://：动态加载可编辑数据脚本（带时间戳，改文件后普通刷新即生效）
+  const fromScript = await loadDataScript('unicode-map.data.js', '__SNFONT_UNICODE_MAP__')
+  if (fromScript) return fromScript
   const res2 = await fetch(mapJsonInline)
   return await res2.json()
 }

@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { viteSingleFile } from 'vite-plugin-singlefile'
+import fs from 'node:fs'
 import { fileURLToPath, URL } from 'node:url'
 
 // 构建形态：绿色免安装版（dist/index.html 双击即用，file:// 协议）
@@ -8,10 +9,34 @@ import { fileURLToPath, URL } from 'node:url'
 // 1) file:// 下 <script type="module"> 会被 CORS 拦截 → 产物用 IIFE（经典脚本，无 CORS）
 // 2) file:// 下 fetch 外部文件（wasm/json）被拦 → 以 dataURL 内联（assetsInlineLimit 放开）
 // 3) 不使用 Service Worker/PWA（file:// 下本就不可用），维持零依赖双击运行
+// 绿色版 index.html 定制（仅构建时）：
+// 1) 注入两个"可编辑数据脚本"（经典 script，file:// 下可加载；用户改 data.js 后刷新即生效）
+// 2) favicon 内联为 data URI（dist 只剩 index.html + 数据脚本，分发更干净）
+function portableIndexPlugin() {
+  return {
+    name: 'snfont-portable-index',
+    apply: 'build',
+    transformIndexHtml(html) {
+      let out = html
+      // favicon → data URI
+      const faviconPath = fileURLToPath(new URL('./public/favicon.svg', import.meta.url))
+      if (fs.existsSync(faviconPath)) {
+        const svg = fs.readFileSync(faviconPath, 'utf8')
+        const dataUri = 'data:image/svg+xml,' + encodeURIComponent(svg.replace(/\s+/g, ' ').trim())
+        out = out.replace(/<link rel="icon"[^>]*>/, '<link rel="icon" href="' + dataUri + '" />')
+      }
+      // 注意：可编辑数据脚本（unicode-map.data.js 等）不在这里静态注入 ——
+      // 静态 <script src> 会被缓存，导致"改文件后普通刷新读旧数据"；
+      // 改由应用运行时动态加载（lib/loadDataScript.js，带时间戳绕缓存），保证刷新即生效
+      return out
+    }
+  }
+}
+
 export default defineConfig({
   // viteSingleFile：把 JS/CSS 全量内联进 index.html（file:// 下 <script type="module" src>
   // 与 <link crossorigin> 都会被 CORS 拦截；内联后无外部引用，双击 index.html 即用）
-  plugins: [vue(), viteSingleFile()],
+  plugins: [vue(), viteSingleFile(), portableIndexPlugin()],
   base: './',
   resolve: {
     alias: {
