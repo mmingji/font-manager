@@ -9,6 +9,42 @@ import planInline from '../assets/plan-snapshot.json?url'
 // 默认保留区（与 public/codepoint-plan.data.js 的 project_alloc 一致）；运行时可能被配置覆盖
 export const RESERVED = { start: 0xee00, end: 0xefff }
 
+// 参考字体占用的分段统计口径（与配置文件的 reference_sections 一致）；
+// 各段边界可在 codepoint-plan.data.js 中编辑，应用启动时读取覆盖
+export const REFERENCE_SECTIONS = {
+  bmp: { start: 0xe000, end: 0xf8ff },
+  sections: [
+    { range: 'E000–E8CC', start: 0xe000, end: 0xe8cc },
+    { range: 'E8CD–EFFF', start: 0xe8cd, end: 0xefff },
+    { range: 'F000–F0FF', start: 0xf000, end: 0xf0ff },
+    { range: 'F100–F8FF', start: 0xf100, end: 0xf8ff }
+  ]
+}
+
+// 应用配置里的参考分段（reference_sections.sections：start/end 支持 "U+E000" / "E000" 形式）
+function applyReferenceSections(raw) {
+  try {
+    const rs = raw && raw.reference_sections
+    if (!rs) return false
+    const list = Array.isArray(rs.sections) ? rs.sections : []
+    const parsed = []
+    for (const s of list) {
+      const start = toCode(s.start)
+      const end = toCode(s.end)
+      if (start == null || end == null || end <= start) continue
+      parsed.push({ range: s.range || (start.toString(16).toUpperCase() + '–' + end.toString(16).toUpperCase()), start, end })
+    }
+    if (!parsed.length) return false
+    REFERENCE_SECTIONS.sections = parsed
+    const bmpS = toCode(rs.bmp && rs.bmp.start)
+    const bmpE = toCode(rs.bmp && rs.bmp.end)
+    if (bmpS != null && bmpE != null && bmpE > bmpS) REFERENCE_SECTIONS.bmp = { start: bmpS, end: bmpE }
+    return true
+  } catch {
+    return false
+  }
+}
+
 // 基础字形区间：buildFont 内置的可见 ASCII 94 字符（0x21-0x7E）+ 空格(0x20)
 // 这些码位已被内置拉丁字形占用。导入图标若保持原 unicode 落在此区间，
 // 生成字体时会因「重复 unicode」报错（fonteditor 抛 Repeat unicode），必须提醒
@@ -43,20 +79,23 @@ function toCode(v) {
   return parseInt(hex, 16)
 }
 
-// 应用配置（project_alloc.start/end 覆盖保留区；非法值忽略并保留默认）
+// 应用配置：project_alloc 覆盖本项目保留区；reference_sections 覆盖参考分段口径（非法值忽略并保留默认）
 export function applyCodepointPlan(raw) {
+  let ok = false
   try {
     const alloc = raw && raw.project_alloc
-    if (!alloc) return false
-    const start = toCode(alloc.start)
-    const end = toCode(alloc.end)
-    if (start == null || end == null || end <= start) return false
-    RESERVED.start = start
-    RESERVED.end = end
-    return true
-  } catch {
-    return false
-  }
+    if (alloc) {
+      const start = toCode(alloc.start)
+      const end = toCode(alloc.end)
+      if (start != null && end != null && end > start) {
+        RESERVED.start = start
+        RESERVED.end = end
+        ok = true
+      }
+    }
+  } catch { /* 保留默认 */ }
+  applyReferenceSections(raw)
+  return ok
 }
 
 // 启动时读取码位规划配置（开发版与构建版一致：动态加载 ./codepoint-plan.data.js；

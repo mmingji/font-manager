@@ -1,8 +1,7 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useProjectStore } from '../store/project'
 import { loadBuiltinMap } from '../lib/unicodeMap'
-import { computeReferenceOccupancy } from '../lib/codepointStats'
 import { RESERVED } from '../lib/codepointPlan'
 
 const emit = defineEmits(['close'])
@@ -59,24 +58,23 @@ const mapLoading = ref(false)
 
 onMounted(async () => {
   try {
-    await loadBuiltinMap() // 预热，只加载一次
+    await loadBuiltinMap() // 预热映射表（解析命名/批量改名用），只加载一次
   } catch { /* 忽略 */ }
-  await refreshOccupancy() // 刷新占用统计：强制重读映射文件
 })
 
-// 参考映射占用统计（每次打开弹窗/刷新页面都强制重算，保证「刷新即最新」）
-const refStats = ref(null)
-const refStatsError = ref('')
-async function refreshOccupancy() {
-  refStats.value = null
-  refStatsError.value = ''
-  const stats = await computeReferenceOccupancy(true)
-  if (stats) {
-    refStats.value = stats
-  } else {
-    refStatsError.value = '读取 unicode-map.data.js 失败，无法统计参考码位占用'
+// ---------- 本项目保留区占用（设置面板显示） ----------
+// 数据来源：当前项目的图标列表（store.icons）中落在保留区范围内的码位数；
+// 保留区范围来自 codepoint-plan.data.js 的 project_alloc（启动时读取，改文件后刷新页面生效）。
+// 说明：此处只统计「本项目」，参考图标集（unicode-map.data.js）的占用情况不再占用面板空间，
+//       如需要可直接查看 codepoint-plan.data.js 的 reference_sections 说明。
+const projectReserved = computed(() => {
+  const total = RESERVED.end - RESERVED.start + 1
+  let used = 0
+  for (const icon of store.icons) {
+    if (icon.code != null && icon.code >= RESERVED.start && icon.code <= RESERVED.end) used++
   }
-}
+  return { used, total, free: total - used, percent: total > 0 ? Math.round((used / total) * 100) : 0 }
+})
 
 async function applyMapRename() {
   mapLoading.value = true
@@ -162,29 +160,27 @@ async function applyMapRename() {
 
         <section class="panel">
           <div class="panel-head">
-            <h4>码位占用</h4>
-            <button class="small" @click="refreshOccupancy">刷新统计</button>
+            <h4>本项目保留区占用</h4>
           </div>
           <p class="panel-desc">
-            参考映射 <a :href="'./' + mapFileName" target="_blank" class="cfg-link" @click.stop title="点击打开该配置文件，编辑保存后刷新页面即生效">{{ mapFileName }}</a>
-            占用统计（打开即刷新，页面刷新后重新分析）：
+            本项目新增图标按顺序取用保留区 <b>{{ reservedRangeLabel }}</b>（{{ projectReserved.total }} 个）；
+            导入字形原码位落在此区间时会提醒。
           </p>
-          <template v-if="refStats">
-            <p class="cp-line"><b>参考字体占用总量：</b>{{ refStats.total }} 个码位</p>
-            <p class="cp-line"><b>本项目保留区</b>（{{ reservedRangeLabel }}，{{ refStats.reserved.size }} 个）：{{ refStats.reserved.occupied }} 个已被参考字体占用</p>
-            <div class="cp-seg" v-for="s in refStats.sections" :key="s.range">
-              <span class="seg-range">{{ s.range }}</span>
-              <span class="seg-bar"><i :style="{ width: (s.occupied / s.size * 100) + '%' }"></i></span>
-              <span class="seg-count">{{ s.occupied }} / {{ s.size }}</span>
-            </div>
-            <p class="cp-note">
-              本项目新增图标按顺序取用保留区 <b>{{ reservedRangeLabel }}</b>；导入字形原码位落在此区间时会提醒。<br />
-              保留区范围可在
-              <a :href="'./' + planFileName" target="_blank" class="cfg-link" @click.stop title="点击打开该配置文件，编辑 project_alloc.start/end 后刷新页面即生效">{{ planFileName }}</a>
-              的 project_alloc 中修改（保存后刷新页面生效）。
-            </p>
-          </template>
-          <p v-else-if="refStatsError" class="cp-error">{{ refStatsError }}</p>
+          <p class="cp-line">
+            <b>已用</b> {{ projectReserved.used }} / {{ projectReserved.total }} 个
+            <span class="cp-free">（剩余 {{ projectReserved.free }} 个）</span>
+          </p>
+          <div class="cp-seg">
+            <span class="seg-range">{{ reservedRangeLabel }}</span>
+            <span class="seg-bar"><i :style="{ width: projectReserved.percent + '%' }"></i></span>
+            <span class="seg-count">{{ projectReserved.used }} / {{ projectReserved.total }}</span>
+          </div>
+          <p class="cp-note">
+            保留区范围来自
+            <a :href="'./' + planFileName" target="_blank" class="cfg-link" @click.stop title="点击打开该配置文件，编辑 project_alloc.start/end 后刷新页面即生效">{{ planFileName }}</a>
+            的 <code>project_alloc</code>（保存后刷新页面生效）；
+            该文件中也记录了参考图标集的占用分段定义（<code>reference_sections</code>），本面板不再显示。
+          </p>
         </section>
       </div>
       <footer>
@@ -303,6 +299,7 @@ button.small:disabled { opacity: 0.5; cursor: not-allowed; }
 .mr-status { margin: 0; font-size: 12px; color: var(--primary); }
 .cp-line b { font-family: Consolas, monospace; color: var(--text); }
 .cp-note { color: var(--text-2); }
+.cp-free { color: var(--text-2); font-size: 12px; }
 
 /* 配置文件链接：与字体解析弹窗的映射文件链接风格一致 */
 .cfg-link {

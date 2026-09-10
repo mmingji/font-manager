@@ -9,7 +9,7 @@
 | 字体解析    | 上传 ttf/otf/woff/woff2 解析为统一尺寸 SVG（128/512/1024 可自定义）。虚线框上半为解析前设置（SVG 尺寸/名称映射表/保持原 unicode），下半浅灰文件区（已解析信息+点击重选）。预览可勾选/改名/下载 zip；内置 unicode→名称映射表 `public/unicode-map.data.js` 自动命名，无名字字形按 uniXXXX 兜底 |
 | 码位冲突处理  | 解析预览检测字形原码位与内置 ASCII 基础字形(0x20-0x7E)或项目已有图标码位冲突：卡片标红 + 三选一处理（自动分配/移除冲突/覆盖旧图标）。有冲突必须三选一才能导入                                                                                                       |
 | 图标管理    | 主页面按名称首字母分组（中文按拼音），侧边字母索引、搜索、改名/替换/删除，卡片显示 unicode 码位，实时持久化                                                                                                                                      |
-| 项目设置    | 右侧抽屉：项目名/CSS 前缀/字体名/字重/SVG 尺寸 + 「按 unicode 映射批量改名」 + 「码位占用」统计面板                                                                                                                                  |
+| 项目设置    | 右侧抽屉：项目名/CSS 前缀/字体名/字重/SVG 尺寸 + 「按 unicode 映射批量改名」 + 「本项目保留区占用」统计（已用/剩余 + 进度条，范围读 codepoint-plan.data.js）                                                                                                                                  |
 | 项目下载    | 完整 zip：ttf/woff/woff2 + css + demo.html + `<项目名>.project.json`，按产物字体名建文件夹                                                                                                                        |
 | 导入      | 批量 SVG（预览改名/勾选）、导入项目 json 恢复                                                                                                                                                                     |
 | 顶部交互    | 搜索｜多选｜设置｜导入▾｜导出▾                                                                                                                                                                                 |
@@ -81,7 +81,7 @@ src/
 │  ├─ traceImage.js     # 位图 → SVG 矢量化（canvas 二值化 + potrace WASM 封装）
 │  ├─ unicodeMap.js     # unicode→名称 映射表工具
 │  ├─ codepointPlan.js  # 码位规划常量（保留区/ASCII 基础区）与判定
-│  ├─ codepointStats.js # 参考映射占用动态统计
+│  ├─ codepointPlan.js   # 码位规划配置读取（保留区 / 参考分段）与判定
 │  ├─ pinyin.js         # 中文拼音分组/排序
 │  ├─ zip.js            # zip 打包（SVG/项目包/demo.html）
 │  └─ persist.js        # IndexedDB + localStorage 持久化
@@ -98,8 +98,8 @@ src/
 - 内置名称映射文件（public/unicode-map.data.js）中的图标命名来自 Font Awesome v7.3.1 的命名；
   该文件仅为「码位 → 名称」的命名参考数据（不含其字体、图标资源或代码），可自行编辑维护
 - 数据文件统一为经典脚本形态（开发/构建/绿色版一致，内容即 JSON，编辑后刷新即生效）：
-  public/unicode-map.data.js（图标名称映射表）、public/codepoint-plan.data.js（码位规划配置，project_alloc.start/end 决定保留区）
-  · 运行时动态加载并带时间戳，规避浏览器脚本缓存；文件名可在「解析字体 → 名称映射表」与「设置 → 码位占用」中点击打开
+  public/unicode-map.data.js（图标名称映射表）、public/codepoint-plan.data.js（码位规划配置：顶部 project_alloc 决定本项目保留区，reference_sections 记录参考图标集的占用分段定义）
+  · 运行时动态加载并带时间戳，规避浏览器脚本缓存；文件名可在「解析字体 → 名称映射表」与「设置 → 本项目保留区占用」中点击打开
   · 文件缺失时自动回退到构建时内联的快照（保证"仅有 index.html 也能正常使用"）
 - 字体解析内核为 fontkit（vendored 单文件，附生成命令）：取代 opentype.js——后者解析 CFF/OTF 紧凑曲线编码会把空心环/细线类图标的轮廓放大并破坏挖孔方向（曾致空心圆渲染成粗实心环）；现产物带 fill-rule=evenodd（几何挖孔，不依赖路径方向）
 - 图片转 SVG 适用边界：白底/透明底纯色、线稿类图标效果最佳（阈值/反色/去噪点可调）；照片、渐变、复杂细节不适合矢量化，且结果恒为单色轮廓（字体图标的天然约束）
