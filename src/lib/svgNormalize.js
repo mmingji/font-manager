@@ -354,3 +354,57 @@ export function normalizeSvgForce(svg, size = 512) {
     return { svg: null, changed: false }
   }
 }
+
+// 只修越界：把超出 0~1000 的坐标"收缩 + 平移"回框内；坐标已在框内时原样返回（绝不放大、绝不居中重排）。
+// 返回值 { svg, changed }。
+//
+// 为什么不能用 normalizeSvgImport 做这件事（重要）：
+// 字体解析产物是按 em 方格设计的——小图标（如 wifi-weak 小圆圈，宽高仅约 187）本来就该是小的；
+// 而 normalizeSvgImport 会把"宽高都 <300"的图形当作"像素位图小图"放大到满格，
+// 导致解析结果在导入瞬间被放大（用户实测：预览正常、导入后变大）。本函数只处理"越界"这一种异常。
+//
+// 数据来源/调用方：store.addIcons（导入即修复）、store.overwriteByCode（覆盖导入）、
+// store.probeAbnormal / store.repairSvg（启动自检修复旧版本越界数据）
+export function clampSvgToBox(svg, size = 512) {
+  try {
+    const s = String(svg || '')
+    const cmds = collectPathCommands(s)
+    if (!cmds.length) return { svg, changed: false }
+    const bb = pathBBox(cmds)
+    if (!isFinite(bb.minX) || !isFinite(bb.minY)) return { svg, changed: false }
+
+    // 已在框内（±0.5 容差）：原样返回——包含所有"小图形"（em 基准图标）
+    if (bb.minX >= -0.5 && bb.minY >= -0.5 && bb.maxX <= 1000.5 && bb.maxY <= 1000.5) {
+      return { svg, changed: false }
+    }
+
+    const w = bb.maxX - bb.minX
+    const h = bb.maxY - bb.minY
+    if (!(w > 0) || !(h > 0)) return { svg, changed: false }
+
+    // ① 仅当图形比视框大时等比收缩（k ≤ 1，不会放大）② 平移回框内
+    const k = Math.min(1, 1000 / Math.max(w, 1000), 1000 / Math.max(h, 1000))
+    const x0 = bb.minX * k
+    const x1 = bb.maxX * k
+    const y0 = bb.minY * k
+    const y1 = bb.maxY * k
+    let ox = 0
+    let oy = 0
+    if (x0 < 0) ox = -x0
+    if (x1 + ox > 1000) ox = 1000 - x1
+    if (y0 < 0) oy = -y0
+    if (y1 + oy > 1000) oy = 1000 - y1
+
+    const newD = commandsToPathData(cmds, k, ox, oy)
+    // 就地替换 path 的 d 属性：保留 fill / fill-rule（evenodd 决定挖孔，不能丢）等其它属性
+    const pathRe = /(<path[^>]*?\sd=)(["'])([^"']*)\2/i
+    if (!pathRe.test(s)) return { svg, changed: false }
+    const out = s.replace(pathRe, (m, p1, q) => p1 + q + newD + q)
+    // width/height 若存在则统一到 size（与原 svg 的显示尺寸约定一致）
+    const sized = out.replace(/(<svg[^>]*?\swidth=)(["'])([^"']*)\2/i, (m, p1, q) => p1 + q + String(size) + q)
+      .replace(/(<svg[^>]*?\sheight=)(["'])([^"']*)\2/i, (m, p1, q) => p1 + q + String(size) + q)
+    return { svg: sized, changed: true }
+  } catch {
+    return { svg, changed: false }
+  }
+}

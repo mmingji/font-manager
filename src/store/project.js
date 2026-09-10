@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { loadProject, saveProject, loadProjectFromIdb } from '../lib/persist.js'
 import { normalizeSvg } from '../lib/buildFont.js'
+import { clampSvgToBox } from '../lib/svgNormalize.js'
 import { groupKeyOf, pinyinFullKey } from '../lib/pinyin.js'
 import { isInReserved, isBaseAscii, reservedUsage, RESERVED } from '../lib/codepointPlan.js'
 
@@ -203,10 +204,11 @@ export const useProjectStore = defineStore('project', {
                 return this.allocateCode(keep)
               })()
             : this.allocateCode()
-        // 入库前规范化 SVG（幂等）：解析字体等来源在极端字形（出血坐标）下可能产出越界路径，
-        // 这里就地修复，保证"导入即正确"，而不是等下次刷新才被启动自检发现修复
-        // 说明：normalizeSvg 对已规范的 SVG 原样返回，正常图标无额外副作用
-        added.push({ id: uid(), name: this.uniqueName(item.name), svg: normalizeSvg(item.svg, this.svgSize), code })
+        // 入库前只修越界（clampSvgToBox，绝不放大）：解析字体在极端字形（出血坐标）下可能产出越界路径，
+        // 这里就地修复，保证"导入即正确"，而不是等下次刷新才被启动自检发现修复。
+        // 注意不能用 normalizeSvg/normalizeSvgImport：它会把"宽高都 <300"的小图标当像素位图放大满格，
+        // 而解析产物是按 em 方格设计的（小图标就该小）——用户实测预览正常、导入后变大即此原因
+        added.push({ id: uid(), name: this.uniqueName(item.name), svg: clampSvgToBox(item.svg, this.svgSize).svg, code })
       }
       this.icons.push(...added)
       this.persist()
@@ -236,15 +238,15 @@ export const useProjectStore = defineStore('project', {
       for (const item of items) {
         const num = item.code != null && typeof item.code !== 'number' ? parseInt(String(item.code), 16) : item.code
         if (num == null || isNaN(num)) {
-          // 无码位：走自动分配新增（入库前规范化，见 addIcons 中的说明）
-          added.push({ id: uid(), name: this.uniqueName(item.name), svg: normalizeSvg(item.svg, this.svgSize), code: this.allocateCode() })
+          // 无码位：走自动分配新增（入库前只修越界，见 addIcons 中的说明）
+          added.push({ id: uid(), name: this.uniqueName(item.name), svg: clampSvgToBox(item.svg, this.svgSize).svg, code: this.allocateCode() })
           continue
         }
         // 命中已有同码位图标 → 覆盖（保留旧名字 + 新 svg；码位不变）
         const existIdx = this.icons.findIndex((ic) => ic.code === num)
         if (existIdx >= 0) {
           const old = this.icons[existIdx]
-          this.icons[existIdx] = { ...old, svg: normalizeSvg(item.svg, this.svgSize) }
+          this.icons[existIdx] = { ...old, svg: clampSvgToBox(item.svg, this.svgSize).svg }
           overwritten.push({ name: old.name, code: num })
           continue
         }
@@ -252,13 +254,13 @@ export const useProjectStore = defineStore('project', {
         if (isBaseAscii(num)) {
           const alert = this.reservedAlertForCode(num)
           if (alert) codeAlerts.push(alert)
-          added.push({ id: uid(), name: this.uniqueName(item.name), svg: normalizeSvg(item.svg, this.svgSize), code: num })
+          added.push({ id: uid(), name: this.uniqueName(item.name), svg: clampSvgToBox(item.svg, this.svgSize).svg, code: num })
           continue
         }
         // 普通未占用码位：检查保留区占用后新增
         const alert = this.reservedAlertForCode(num)
         if (alert) codeAlerts.push(alert)
-        added.push({ id: uid(), name: this.uniqueName(item.name), svg: normalizeSvg(item.svg, this.svgSize), code: num })
+        added.push({ id: uid(), name: this.uniqueName(item.name), svg: clampSvgToBox(item.svg, this.svgSize).svg, code: num })
       }
       this.icons.push(...added)
       this.persist()
@@ -342,10 +344,11 @@ export const useProjectStore = defineStore('project', {
     },
 
     // 修复异常 SVG（旧版本解析出的负坐标/越界数据）
+    // 只做"收缩 + 平移入框"，不做满格归一化——否则会把本来尺寸正确的小图标放大
     repairSvg(icon) {
-      const fixed = normalizeSvg(icon.svg, this.svgSize)
-      if (fixed !== icon.svg) {
-        icon.svg = fixed
+      const { svg, changed } = clampSvgToBox(icon.svg, this.svgSize)
+      if (changed && svg !== icon.svg) {
+        icon.svg = svg
         return true
       }
       return false
@@ -357,7 +360,8 @@ export const useProjectStore = defineStore('project', {
     probeAbnormal() {
       for (const icon of this.icons) {
         try {
-          if (normalizeSvg(icon.svg, this.svgSize) !== icon.svg) return true
+          // 只判"越界"（clampSvgToBox 对框内坐标原样返回）——避免把正常的小图标误判为需修复
+          if (clampSvgToBox(icon.svg, this.svgSize).changed) return true
         } catch {
           return true
         }
