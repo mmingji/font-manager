@@ -166,12 +166,13 @@ async function applyMapRename() {
             本项目新增图标按顺序取用保留区 <b>{{ reservedRangeLabel }}</b>（{{ projectReserved.total }} 个）；
             导入字形原码位落在此区间时会提醒。
           </p>
+          <!-- 范围标签与「已用」同一行、同样式（粗体等宽），条形容器只保留进度条与计数 -->
           <p class="cp-line">
+            <b>{{ reservedRangeLabel }}</b>
             <b>已用</b> {{ projectReserved.used }} / {{ projectReserved.total }} 个
             <span class="cp-free">（剩余 {{ projectReserved.free }} 个）</span>
           </p>
           <div class="cp-seg">
-            <span class="seg-range">{{ reservedRangeLabel }}</span>
             <span class="seg-bar"><i :style="{ width: projectReserved.percent + '%' }"></i></span>
             <span class="seg-count">{{ projectReserved.used }} / {{ projectReserved.total }}</span>
           </div>
@@ -298,6 +299,7 @@ button.small:hover:not(:disabled) { border-color: var(--primary); color: var(--p
 button.small:disabled { opacity: 0.5; cursor: not-allowed; }
 .mr-status { margin: 0; font-size: 12px; color: var(--primary); }
 .cp-line b { font-family: Consolas, monospace; color: var(--text); }
+.cp-line b + b { margin-left: 10px; } /* 范围与「已用」之间留出间隔（两者样式一致） */
 .cp-note { color: var(--text-2); }
 .cp-free { color: var(--text-2); font-size: 12px; }
 
@@ -311,7 +313,6 @@ button.small:disabled { opacity: 0.5; cursor: not-allowed; }
 .cfg-link:hover { color: var(--primary-dark); }
 .cp-error { color: #c03535; }
 .cp-seg { display: flex; align-items: center; gap: 10px; font-size: 12px; }
-.seg-range { width: 84px; font-family: Consolas, monospace; color: var(--text-2); }
 .seg-bar { flex: 1; height: 6px; border-radius: 3px; background: #eef1f6; overflow: hidden; }
 .seg-bar i { display: block; height: 100%; background: var(--primary); border-radius: 3px; }
 .seg-count { width: 74px; text-align: right; font-family: Consolas, monospace; color: var(--text-2); }
