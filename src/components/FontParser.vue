@@ -428,7 +428,6 @@ function miniSvg(svg) {
               class="icon-item"
               :class="{ on: selected.has(i), conflict: conflictIndices.has(i), disabled: conflictMode === 'remove' && conflictIndices.has(i), current: currentIdx === i }"
               @click="toggleSelect(i)"
-              :title="'点击选中/取消选中；点右上角小眼睛查看大预览'"
             >
               <input type="checkbox" :checked="selected.has(i)" :disabled="conflictMode === 'remove' && conflictIndices.has(i)" @change="toggleSelect(i)" @click.stop />
               <!-- 右上角小眼睛：与左上复选框对称，点击预览该字形（卡片点击则只管勾选） -->
@@ -776,7 +775,11 @@ header h3 {
 
 .icon-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  /* 固定列宽：卡片大小恒定，少量字形时不被 1fr 拉伸撑满（图标类目视觉一致） */
+  grid-template-columns: repeat(auto-fill, 104px);
+  /* 行高按内容自适应且行不从顶部拉伸（否则单行时被撑满容器高度，卡片留大片空白） */
+  grid-auto-rows: min-content;
+  align-content: start;
   gap: 8px;
   /* 弹性占满 body 剩余高度（min-height:96px 保底，hero 出现时网格仍可见可滚），滚动条只出现在这里 */
   flex: 1;
@@ -789,10 +792,11 @@ header h3 {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  /* 紧凑排布：文字/按钮占位尽量小，把空间让给字形预览 */
+  gap: 2px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 10px 6px;
+  padding: 6px 4px 4px;
   cursor: pointer;
   position: relative;
 }
@@ -907,17 +911,34 @@ header h3 {
 
 .mini {
   color: #333;
-  height: 36px;
+  height: 48px; /* 图标区加大，为字体图标留更多空间 */
   display: flex;
   align-items: center;
 }
 
 .iname {
   font-size: 12px;
+  line-height: 1.2;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 码位：与名称同级的次要信息，最小字号 12px */
+.icode {
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--text-2);
+  font-family: Consolas, Monaco, monospace;
+}
+
+/* 卡片内「改名」按钮：紧凑（全局按钮默认内边距偏大） */
+.rename-btn {
+  padding: 1px 8px;
+  font-size: 12px;
+  border-radius: 4px;
+  line-height: 1.5;
 }
 
 footer {
