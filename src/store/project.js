@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia'
 import { loadProject, saveProject, loadProjectFromIdb } from '../lib/persist.js'
-import { normalizeSvg } from '../lib/buildFont.js'
 import { clampSvgToBox } from '../lib/svgNormalize.js'
 import { groupKeyOf, pinyinFullKey } from '../lib/pinyin.js'
 import { isInReserved, isBaseAscii, reservedUsage, RESERVED } from '../lib/codepointPlan.js'

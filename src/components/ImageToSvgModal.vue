@@ -272,12 +272,15 @@ function miniSvg(svg) {
             <template v-else>继续拖入或点击可追加图片（同名文件将确认后覆盖重转）</template>
           </p>
         </div>
-        <p v-if="error" class="error">{{ error }}</p>
+        <!-- 错误提示预留整行高度：避免提示出现/消失时把下方内容推上推下（弹窗跳动） -->
+        <div class="msg-line"><p v-if="error" class="error">{{ error }}</p></div>
 
         <!-- 大预览：按项目设置的 SVG 尺寸渲染当前项；参数随当前选中项独立保存与调整 -->
         <div class="hero" v-if="currentItem">
           <div class="hero-head">
             <span class="hero-name">{{ currentItem.name }}</span>
+            <!-- 转换状态放在标题行右侧（而非参数条内）：参数条保持单行，不再因状态文字出现/消失而换行 -->
+            <span class="trace-status" v-show="tracing">⟳ {{ traceStatus }}</span>
             <span class="hero-note">按项目设置的 SVG 尺寸（{{ store.svgSize }}px）预览</span>
           </div>
           <!-- 参数条（仅位图项）：调整作用于当前选中项，下方点选其他图切换各自的参数 -->
@@ -297,7 +300,7 @@ function miniSvg(svg) {
               <input type="range" min="0" max="20" step="1" v-model.number="currentParams.turdsize" @input="scheduleRetrace" />
               <span class="param-val">{{ currentParams.turdsize }}</span>
             </label>
-            <span class="trace-status" v-if="tracing">⟳ {{ traceStatus }}</span>
+
           </div>
           <div class="hero-svg-box" v-html="currentItem.svg"></div>
         </div>
@@ -425,9 +428,15 @@ header h3 {
   font-size: 13px;
 }
 
+.msg-line {
+  /* 常驻占位：无错误时也是同样高度（见模板注释） */
+  min-height: 22px;
+  margin-top: 6px;
+}
+
 .error {
   color: var(--danger);
-  margin: 10px 0 0;
+  margin: 0;
   font-size: 13px;
 }
 
@@ -473,12 +482,22 @@ header h3 {
 .param-val {
   font-family: Consolas, Monaco, monospace;
   color: var(--text);
-  min-width: 22px;
+  /* 固定宽度 + 等宽右对齐：数值位数变化（9→255）不引起参数条内元素位移 */
+  min-width: 30px;
+  text-align: right;
+  flex: 0 0 auto;
 }
 
 .trace-status {
-  margin-left: auto;
+  /* 位于标题行：固定宽度 + 单行省略，文案长短变化不影响布局 */
+  flex: 0 0 auto;
+  width: 190px;
   font-size: 12px;
+  color: var(--text-2);
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 大预览：按项目 SVG 尺寸渲染，容器内等比压缩显示 */
@@ -511,14 +530,19 @@ header h3 {
   font-size: 12px;
   color: var(--text-2);
   white-space: nowrap;
+  /* 标题行内与其他元素一起右对齐（hero-name 占满剩余空间） */
+  margin-left: auto;
+  flex: 0 0 auto;
 }
+
+.hero-name { flex: 1 1 auto; }
 
 .hero-svg-box {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 120px;
-  max-height: 340px;
+  /* 固定高度：调整阈值/去噪点时图形大小会变化，高度若自适应会导致整个弹窗跳动（用户反馈） */
+  height: 340px;
   overflow: hidden;
 }
 
