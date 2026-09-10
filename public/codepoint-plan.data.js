@@ -1,4 +1,7 @@
-{
+// 码位规划基线（保留区/参考占用段）（绿色版可编辑数据文件）
+// 内容与 public/codepoint-plan.json 相同；直接编辑本文件保存后，刷新页面即生效。
+// file:// 下浏览器禁止 fetch 本地文件，故用经典 script 提供数据（HTTP 部署时仍优先读取 codepoint-plan.json）。
+window.__SNFONT_CODEPOINT_PLAN__ = {
   "version": 1,
   "generatedAt": "2026-09-08T07:06:17.408Z",
   "description": "码位规划：三段 Unicode 私人使用区(PUA)分布、参考映射占用动态统计、本项目（以当前项目名为准）图标码位分配规则。占用数字为运行时按最新 unicode-map.json 动态计算，刷新页面后自动更新（见 codepointStats.js）",

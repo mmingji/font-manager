@@ -59,7 +59,7 @@ export const useProjectStore = defineStore('project', {
       // 分配区间：U+EE00–U+EFFF（512 个），避开参考字体已占用的 E000–E8CC / F000+ 码位
       // 旧项目 nextCode 已推进过也保留（不回退），新图标统一从 EE00 起按序取用；
       // 若 EE00–EFFF 用尽则自然顺延（512 个通常足够一个图标项目）
-      // 分配起点跟随码位规划配置（public/codepoint-plan.json 的 project_alloc.start，默认 EE00）
+      // 分配起点跟随码位规划配置（public/codepoint-plan.data.js 的 project_alloc.start，默认 EE00）
       nextCode: saved?.nextCode || RESERVED.start,
       // 启动完成标志：首帧渲染前先完成 IDB hydrate，避免「先空白再闪现完整列表」
       booted: false
@@ -203,7 +203,10 @@ export const useProjectStore = defineStore('project', {
                 return this.allocateCode(keep)
               })()
             : this.allocateCode()
-        added.push({ id: uid(), name: this.uniqueName(item.name), svg: item.svg, code })
+        // 入库前规范化 SVG（幂等）：解析字体等来源在极端字形（出血坐标）下可能产出越界路径，
+        // 这里就地修复，保证"导入即正确"，而不是等下次刷新才被启动自检发现修复
+        // 说明：normalizeSvg 对已规范的 SVG 原样返回，正常图标无额外副作用
+        added.push({ id: uid(), name: this.uniqueName(item.name), svg: normalizeSvg(item.svg, this.svgSize), code })
       }
       this.icons.push(...added)
       this.persist()
@@ -233,15 +236,15 @@ export const useProjectStore = defineStore('project', {
       for (const item of items) {
         const num = item.code != null && typeof item.code !== 'number' ? parseInt(String(item.code), 16) : item.code
         if (num == null || isNaN(num)) {
-          // 无码位：走自动分配新增
-          added.push({ id: uid(), name: this.uniqueName(item.name), svg: item.svg, code: this.allocateCode() })
+          // 无码位：走自动分配新增（入库前规范化，见 addIcons 中的说明）
+          added.push({ id: uid(), name: this.uniqueName(item.name), svg: normalizeSvg(item.svg, this.svgSize), code: this.allocateCode() })
           continue
         }
         // 命中已有同码位图标 → 覆盖（保留旧名字 + 新 svg；码位不变）
         const existIdx = this.icons.findIndex((ic) => ic.code === num)
         if (existIdx >= 0) {
           const old = this.icons[existIdx]
-          this.icons[existIdx] = { ...old, svg: item.svg }
+          this.icons[existIdx] = { ...old, svg: normalizeSvg(item.svg, this.svgSize) }
           overwritten.push({ name: old.name, code: num })
           continue
         }
@@ -249,20 +252,21 @@ export const useProjectStore = defineStore('project', {
         if (isBaseAscii(num)) {
           const alert = this.reservedAlertForCode(num)
           if (alert) codeAlerts.push(alert)
-          added.push({ id: uid(), name: this.uniqueName(item.name), svg: item.svg, code: num })
+          added.push({ id: uid(), name: this.uniqueName(item.name), svg: normalizeSvg(item.svg, this.svgSize), code: num })
           continue
         }
         // 普通未占用码位：检查保留区占用后新增
         const alert = this.reservedAlertForCode(num)
         if (alert) codeAlerts.push(alert)
-        added.push({ id: uid(), name: this.uniqueName(item.name), svg: item.svg, code: num })
+        added.push({ id: uid(), name: this.uniqueName(item.name), svg: normalizeSvg(item.svg, this.svgSize), code: num })
       }
       this.icons.push(...added)
       this.persist()
       const after = reservedUsage(this.icons)
       let overflow = ''
+      const rangeLabel = 'U+' + RESERVED.start.toString(16).toUpperCase() + '–U+' + RESERVED.end.toString(16).toUpperCase()
       if (before.free > 0 && after.free === 0) {
-        overflow = '⚠️ 本项目保留区（U+EE00–U+EFFF，512 个）已用满，新增图标将顺延到 U+F000 之后'
+        overflow = `⚠️ 本项目保留区（${rangeLabel}，${RESERVED.end - RESERVED.start + 1} 个）已用满，新增图标将顺延到其后`
       }
       return { added, overwritten, codeAlerts, overflow }
     },
@@ -275,6 +279,38 @@ export const useProjectStore = defineStore('project', {
       let n = 2
       while (names.has(base + '_' + n)) n++
       return base + '_' + n
+    },
+
+    // 按映射表批量改名（设置抽屉「应用映射改名」按钮用）
+    // 为什么单独实现：逐个调用 renameIcon 会触发 N 次 persist（IndexedDB + localStorage 深拷贝快照），
+    // 3700 个图标时直接把页面卡死；这里一次性计算 + 只持久化一次
+    // 规则：命中映射且与现名不同的改为映射名；重名自动加 _2/_3 后缀（与 renameIcon 一致）；
+    //       未被映射改名的图标优先占位原名，避免它们的名字被别的图标抢走
+    renameByMap(hexToName) {
+      const used = new Set()
+      const targets = new Map() // id → 新名字；null 表示保持原名
+      for (const icon of this.icons) {
+        const hex = icon.code == null ? null : icon.code.toString(16).toLowerCase()
+        const mapped = hex ? hexToName[hex] : null
+        const target = mapped && mapped !== icon.name ? mapped : null
+        targets.set(icon.id, target)
+        if (!target) used.add(icon.name) // 保持原名的先占位
+      }
+      let changed = 0
+      for (const icon of this.icons) {
+        let target = targets.get(icon.id)
+        if (!target) continue
+        if (used.has(target)) {
+          let n = 2
+          while (used.has(`${target}_${n}`)) n++
+          target = `${target}_${n}`
+        }
+        used.add(target)
+        icon.name = target
+        changed++
+      }
+      if (changed) this.persist() // 单次持久化
+      return changed
     },
 
     renameIcon(id, name) {

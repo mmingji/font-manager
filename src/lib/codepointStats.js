@@ -1,27 +1,20 @@
 // 参考字体映射占用动态统计
-// 页面刷新/打开时调用 computeReferenceOccupancy(true)，强制重新读取 public/unicode-map.json，
+// 页面刷新/打开时调用 computeReferenceOccupancy(true)，强制重新读取 unicode-map.data.js，
 // 基于最新映射内容重新分析各码位段占用情况（不依赖静态 json，保证刷新即最新）
 import mapJsonInline from '../assets/unicode-map.json?url'
 import { loadDataScript } from './loadDataScript.js'
 import { RESERVED } from './codepointPlan.js'
 const MAP_URL = './unicode-map.json'
 
-// 数据来源优先级同 lib/unicodeMap.js：HTTP fetch json → file:// 用 data.js 全局数据 → 构建内联快照兜底
-const isFileProtocol = typeof location !== 'undefined' && location.protocol === 'file:'
+// 数据来源同 lib/unicodeMap.js：动态加载 unicode-map.data.js → 缺失时用构建内联快照
 async function fetchMapJson() {
-  if (!isFileProtocol) {
-    try {
-      const res = await fetch(MAP_URL, { cache: 'no-cache' })
-      if (res.ok) return await res.json()
-    } catch { /* 继续回退 */ }
-  }
   const fromScript = await loadDataScript('unicode-map.data.js', '__SNFONT_UNICODE_MAP__')
   if (fromScript) return fromScript
-  const res2 = await fetch(mapJsonInline)
-  return await res2.json()
+  const res = await fetch(mapJsonInline)
+  return await res.json()
 }
 
-// 分析 unicode-map.json 的原始数据（扁平或嵌套都兼容）：返回 { codeSet, total }
+// 分析 unicode-map.data.js 的原始数据（扁平或嵌套都兼容）：返回 { codeSet, total }
 function parseOccupied(raw) {
   // 归一化原始 json（兼容扁平 { "hex": name } / { "name": "hex" } 与嵌套 { name: { unicode } } 两种格式）
   const set = new Set()
@@ -53,7 +46,7 @@ export function analyzeOccupancy(codeSet) {
       { range: 'F000–F0FF', start: 0xF000, end: 0xF0FF, size: 0xF0FF - 0xF000 + 1, occupied: count(0xF000, 0xF0FF) },
       { range: 'F100–F8FF', start: 0xF100, end: 0xF8FF, size: 0xF8FF - 0xF100 + 1, occupied: count(0xF100, 0xF8FF) }
     ],
-    // 本项目保留区：跟随码位规划配置（codepoint-plan.json 的 project_alloc）
+    // 本项目保留区：跟随码位规划配置（codepoint-plan.data.js 的 project_alloc）
     reserved: { start: RESERVED.start, end: RESERVED.end, size: RESERVED.end - RESERVED.start + 1, occupied: count(RESERVED.start, RESERVED.end) }
   }
 }

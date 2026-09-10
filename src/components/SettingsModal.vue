@@ -10,14 +10,13 @@ const store = useProjectStore()
 
 const SVG_SIZES = [128, 512, 1024]
 
-// 配置文件链接：HTTP 部署指向 public 下 json；绿色版（file://）指向同目录可编辑的 .data.js
-// 两者都可点击打开编辑，保存后刷新页面即生效（映射表 / 码位规划均如此）
+// 配置文件链接：开发版与构建版统一为 public/*.data.js（内容即 JSON）
+// 点击可直接打开编辑，保存后刷新页面即生效（映射表 / 码位规划均如此）
 // 保留区范围标签（跟随码位规划配置，见 lib/codepointPlan.js 的 RESERVED）
 const reservedRangeLabel = `U+${RESERVED.start.toString(16).toUpperCase()}–U+${RESERVED.end.toString(16).toUpperCase()}`
 
-const isFileProtocol = typeof location !== 'undefined' && location.protocol === 'file:'
-const mapFileName = isFileProtocol ? 'unicode-map.data.js' : 'unicode-map.json'
-const planFileName = isFileProtocol ? 'codepoint-plan.data.js' : 'codepoint-plan.json'
+const mapFileName = 'unicode-map.data.js'
+const planFileName = 'codepoint-plan.data.js'
 const WEIGHTS = [
   { value: 'regular', label: '常规体 Regular' },
   { value: 'bold', label: '粗体 Bold' }
@@ -53,8 +52,8 @@ function save() {
   emit('close')
 }
 
-// ---------- 映射批量改名（unicode-map.json → 当前项目图标） ----------
-// 需求：修改 public/unicode-map.json 后，管理页按映射批量把命中 unicode 的图标改成 json 里的名称
+// ---------- 映射批量改名（unicode-map.data.js → 当前项目图标） ----------
+// 需求：修改 public/unicode-map.data.js 后，管理页按映射批量把命中 unicode 的图标改成其中的名称
 const mapStatus = ref('')
 const mapLoading = ref(false)
 
@@ -62,7 +61,7 @@ onMounted(async () => {
   try {
     await loadBuiltinMap() // 预热，只加载一次
   } catch { /* 忽略 */ }
-  await refreshOccupancy() // 刷新占用统计：强制重读 unicode-map.json
+  await refreshOccupancy() // 刷新占用统计：强制重读映射文件
 })
 
 // 参考映射占用统计（每次打开弹窗/刷新页面都强制重算，保证「刷新即最新」）
@@ -75,7 +74,7 @@ async function refreshOccupancy() {
   if (stats) {
     refStats.value = stats
   } else {
-    refStatsError.value = '读取 unicode-map.json 失败，无法统计参考码位占用'
+    refStatsError.value = '读取 unicode-map.data.js 失败，无法统计参考码位占用'
   }
 }
 
@@ -86,17 +85,8 @@ async function applyMapRename() {
     const map = await loadBuiltinMap(true) // 强制重新读取（绕过浏览器缓存）
     const hexToName = map
     // 对当前项目每个图标：若其 code 在映射中且映射名与现名不同，则改名（改名在 store 内保证唯一）
-    const icons = store.icons
-    let changed = 0
-    for (const icon of icons) {
-      if (icon.code == null) continue
-      const hex = icon.code.toString(16).toLowerCase()
-      const target = hexToName[hex]
-      if (target && target !== icon.name) {
-        store.renameIcon(icon.id, target)
-        changed++
-      }
-    }
+    // 交给 store 一次性批量改名（内部只持久化一次；逐个 renameIcon 会因 3700 次写盘卡死页面）
+    const changed = store.renameByMap(hexToName)
     if (changed) {
       mapStatus.value = `已按映射批量改名 ${changed} 个图标`
     } else {
@@ -172,7 +162,7 @@ async function applyMapRename() {
             <button class="small" @click="refreshOccupancy">刷新统计</button>
           </div>
           <p class="panel-desc">
-            参考映射 <a :href="'./' + mapFileName" target="_blank" class="cfg-link" title="点击打开该配置文件，编辑保存后刷新页面即生效">{{ mapFileName }}</a>
+            参考映射 <a :href="'./' + mapFileName" target="_blank" class="cfg-link" @click.stop title="点击打开该配置文件，编辑保存后刷新页面即生效">{{ mapFileName }}</a>
             占用统计（打开即刷新，页面刷新后重新分析）：
           </p>
           <template v-if="refStats">
@@ -186,7 +176,7 @@ async function applyMapRename() {
             <p class="cp-note">
               本项目新增图标按顺序取用保留区 <b>{{ reservedRangeLabel }}</b>；导入字形原码位落在此区间时会提醒。<br />
               保留区范围可在
-              <a :href="'./' + planFileName" target="_blank" class="cfg-link" title="点击打开该配置文件，编辑 project_alloc.start/end 后刷新页面即生效">{{ planFileName }}</a>
+              <a :href="'./' + planFileName" target="_blank" class="cfg-link" @click.stop title="点击打开该配置文件，编辑 project_alloc.start/end 后刷新页面即生效">{{ planFileName }}</a>
               的 project_alloc 中修改（保存后刷新页面生效）。
             </p>
           </template>

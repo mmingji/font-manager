@@ -1,8 +1,9 @@
-// 构建前置：准备"绿色免安装版（file:// 双击）"所需的两类资源
-// ① 内联进 bundle 的资源 → 复制到 src/assets/（Vite 只内联被 import 的资源，public 禁止 import）
-//    woff2.wasm（woff2 编解码 wasm）/ unicode-map.json / codepoint-plan.json（构建时快照，作最终兜底）
-// ② 运行时可编辑的数据文件 → 生成 public/*.data.js（经典 <script> 加载，file:// 下不受 CORS 限制）
-//    用户在绿色版目录里直接编辑 unicode-map.data.js 并刷新页面即可生效（等价于 HTTP 版的改 json 生效）
+// 构建前置：由"可编辑数据文件"生成"内联兜底快照"，并复制需要内联的二进制资源
+// 数据文件统一为 public/*.data.js（唯一数据源，内容即 JSON；开发/构建/绿色版一致）：
+//   unicode-map.data.js    图标名称映射表
+//   codepoint-plan.data.js 码位规划配置
+// 运行时（HTTP 与 file:// 一致）用经典 <script> 动态加载这两个文件（见 src/lib/loadDataScript.js），
+// 加载失败（用户删了文件）时回退到本脚本生成的 src/assets/*.json 内联快照 —— 保证"仅有 index.html 也能用"。
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -11,8 +12,40 @@ const from = 'public'
 const to = 'src/assets'
 
 fs.mkdirSync(to, { recursive: true })
+
+// 1) 由 data.js 提取 JSON → src/assets/*.json（内联兜底快照）
+const DATASETS = [
+  ['unicode-map.data.js', 'unicode-map.json', '__SNFONT_UNICODE_MAP__'],
+  ['codepoint-plan.data.js', 'codepoint-plan.json', '__SNFONT_CODEPOINT_PLAN__']
+]
+const extracted = []
+for (const [jsFile, jsonFile, globalName] of DATASETS) {
+  const src = path.join(from, jsFile)
+  if (!fs.existsSync(src)) {
+    console.warn('[sync-inline-assets] 缺少 ' + src + '（跳过，将沿用上一次的快照）')
+    continue
+  }
+  const text = fs.readFileSync(src, 'utf8')
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
+  if (start < 0 || end <= start) {
+    console.warn('[sync-inline-assets] ' + jsFile + ' 内容异常（未找到 JSON 主体），跳过')
+    continue
+  }
+  const json = text.slice(start, end + 1)
+  try {
+    JSON.parse(json) // 校验合法性：数据文件被改坏时构建即报错，避免把坏数据打进产物
+  } catch (e) {
+    console.error('[sync-inline-assets] ' + jsFile + ' 不是合法 JSON：' + e.message)
+    process.exit(1)
+  }
+  fs.writeFileSync(path.join(to, jsonFile), json)
+  extracted.push(jsonFile + ' ← ' + jsFile)
+}
+
+// 2) woff2.wasm：file:// 下无法 fetch 外部文件，复制到 src/assets 供构建内联为 dataURL
 const copied = []
-for (const f of FILES) {
+for (const f of ['woff2.wasm']) {
   const src = path.join(from, f)
   if (!fs.existsSync(src)) {
     console.warn('[sync-inline-assets] 缺少 ' + src + '（跳过）')
@@ -22,26 +55,5 @@ for (const f of FILES) {
   copied.push(f)
 }
 
-// 生成可编辑的数据脚本：内容就是对应 json（外面包一层全局变量赋值，便于本地文件直接加载）
-const DATASETS = [
-  ['unicode-map.json', 'unicode-map.data.js', '__SNFONT_UNICODE_MAP__', 'unicode → 图标名称映射表'],
-  ['codepoint-plan.json', 'codepoint-plan.data.js', '__SNFONT_CODEPOINT_PLAN__', '码位规划基线（保留区/参考占用段）']
-]
-const generated = []
-for (const [jsonFile, jsFile, globalName, title] of DATASETS) {
-  const src = path.join(from, jsonFile)
-  if (!fs.existsSync(src)) continue
-  const json = fs.readFileSync(src, 'utf8').trim()
-  const out = [
-    '// ' + title + '（绿色版可编辑数据文件）',
-    '// 内容与 public/' + jsonFile + ' 相同；直接编辑本文件保存后，刷新页面即生效。',
-    '// file:// 下浏览器禁止 fetch 本地文件，故用经典 script 提供数据（HTTP 部署时仍优先读取 ' + jsonFile + '）。',
-    'window.' + globalName + ' = ' + json,
-    ''
-  ].join('\n')
-  fs.writeFileSync(path.join(from, jsFile), out)
-  generated.push(jsFile)
-}
-
-console.log('[sync-inline-assets] 内联资源:', copied.join(', '))
-console.log('[sync-inline-assets] 可编辑数据文件:', generated.join(', '))
+console.log('[sync-inline-assets] 内联快照:', extracted.join('; ') || '（无）')
+console.log('[sync-inline-assets] 内联资源:', copied.join(', ') || '（无）')

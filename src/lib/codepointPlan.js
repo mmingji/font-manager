@@ -1,12 +1,12 @@
 // 码位规划与告警
 // 保留区：默认 U+EE00–U+EFFF（512 个），本项目新增图标按顺序取用；
-// 参考字体映射（unicode-map.json）已占用的码位段：E000–E8CC / F000+，不与保留区重叠。
-// 可配置：public/codepoint-plan.json 的 project_alloc.start/end 会覆盖下面默认值
+// 参考字体映射（unicode-map.data.js）已占用的码位段：E000–E8CC / F000+，不与保留区重叠。
+// 可配置：public/codepoint-plan.data.js 的 project_alloc.start/end 会覆盖下面默认值
 //（绿色版读同目录 codepoint-plan.data.js；改文件后刷新页面即生效，见 initCodepointPlan）
 import { loadDataScript } from './loadDataScript.js'
 import planInline from '../assets/codepoint-plan.json?url'
 
-// 默认保留区（与 public/codepoint-plan.json 的 project_alloc 一致）；运行时可能被配置覆盖
+// 默认保留区（与 public/codepoint-plan.data.js 的 project_alloc 一致）；运行时可能被配置覆盖
 export const RESERVED = { start: 0xee00, end: 0xefff }
 
 // 基础字形区间：buildFont 内置的可见 ASCII 94 字符（0x21-0x7E）+ 空格(0x20)
@@ -59,16 +59,9 @@ export function applyCodepointPlan(raw) {
   }
 }
 
-// 启动时读取码位规划配置（HTTP 读 json；file:// 读 index.html 同目录 codepoint-plan.data.js）
-// 必须在应用挂载前 await，保证 store 初始化（nextCode 起点）用上配置值
+// 启动时读取码位规划配置（开发版与构建版一致：动态加载 ./codepoint-plan.data.js；
+// 文件缺失时回退构建内联快照）。必须在应用挂载前 await，保证 store 初始化（nextCode 起点）用上配置值
 export async function initCodepointPlan() {
-  const isFile = typeof location !== 'undefined' && location.protocol === 'file:'
-  if (!isFile) {
-    try {
-      const res = await fetch('./codepoint-plan.json', { cache: 'no-cache' })
-      if (res.ok) return applyCodepointPlan(await res.json())
-    } catch { /* 继续回退 */ }
-  }
   const fromScript = await loadDataScript('codepoint-plan.data.js', '__SNFONT_CODEPOINT_PLAN__')
   if (fromScript) return applyCodepointPlan(fromScript)
   try {

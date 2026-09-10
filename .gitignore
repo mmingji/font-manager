@@ -55,6 +55,3 @@ src/assets/
 
 # ===== 便携版打包产物（npm run pack 生成，可不入库） =====
 SnFont-便携版.zip
-
-# ===== 由 sync-inline-assets 生成的可编辑数据脚本（源文件为 public/*.json，不入库） =====
-public/*.data.js

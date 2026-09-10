@@ -20,9 +20,25 @@ const exportOpen = ref(false)
 function setImportOpen(v) { importOpen.value = v; if (v) exportOpen.value = false }
 function setExportOpen(v) { exportOpen.value = v; if (v) importOpen.value = false }
 
-// 启动时自动修复旧版本解析出的异常 SVG
+// 异常 SVG 自检与修复（启动时 + 每次导入后都执行）
+// 职责：检测项目内坐标越界/格式异常的 SVG 并就地修复（幂等），结果用顶部提示条反馈
 const repairNotice = ref('')
 const repairing = ref(false)
+
+async function checkAndRepair() {
+  // 轻量探测：无异常则完全静默（正常刷新/导入不该闪「检查中」）
+  const hasAbnormal = store.probeAbnormal()
+  if (!hasAbnormal) return 0
+  repairing.value = true
+  const n = await store.repairAll((done, total, fixed) => {
+    repairNotice.value = `正在修复异常图标坐标… ${done}/${total}` + (fixed ? `（已修复 ${fixed}）` : '')
+  })
+  repairing.value = false
+  repairNotice.value = `已自动修复 ${n} 个异常图标（坐标越界）`
+  setTimeout(() => (repairNotice.value = ''), 5000)
+  return n
+}
+
 onMounted(async () => {
   // 刷新/关闭前：IDB 异步写入可能未完成，同步把最新快照落 localStorage 兜底（防丢写）
   const flush = () => flushPendingSnapshot()
@@ -30,19 +46,7 @@ onMounted(async () => {
   window.addEventListener('beforeunload', flush)
   // 启动引导：先完成 IDB 数据恢复（booted gate 挡住首帧，避免「空白→闪现完整列表」）
   await store.bootstrap()
-  // 自动修复（按需）：先用轻量探测判断是否存在异常 SVG——
-  // 无异常则完全静默（正常数据刷新不该每次闪「检查中」）；
-  // 有异常才展示进度并修复，修复完提示数量 5s 后消失。
-  const hasAbnormal = store.probeAbnormal()
-  if (hasAbnormal) {
-    repairing.value = true
-    const n = await store.repairAll((done, total, fixed) => {
-      repairNotice.value = `正在修复异常图标坐标… ${done}/${total}` + (fixed ? `（已修复 ${fixed}）` : '')
-    })
-    repairing.value = false
-    repairNotice.value = `已自动修复 ${n} 个异常图标（坐标越界）`
-    setTimeout(() => (repairNotice.value = ''), 5000)
-  }
+  await checkAndRepair()
 })
 
 // 弹窗控制
@@ -320,7 +324,12 @@ async function exportProject() {
       </div>
     </main>
 
-    <FontParser v-if="showParser" :initial-file="parserInitialFile" @close="showParser = false; parserInitialFile = null" />
+    <FontParser
+      v-if="showParser"
+      :initial-file="parserInitialFile"
+      @close="showParser = false; parserInitialFile = null"
+      @imported="checkAndRepair"
+    />
     <ImportModal v-if="showImport" :initial-files="importInitialFiles" @close="showImport = false; importInitialFiles = null" />
     <ImageToSvgModal v-if="showImageToSvg" :replace-target="replaceTarget" :initial-files="imageInitialFiles" @close="closeImageToSvg" />
     <SettingsModal v-if="showSettings" @close="showSettings = false" />

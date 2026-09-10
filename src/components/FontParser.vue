@@ -6,7 +6,8 @@ import { useProjectStore } from '../store/project'
 import { parseUnicodeMap, applyUnicodeNameMap, loadBuiltinMap } from '../lib/unicodeMap'
 import { isBaseAscii } from '../lib/codepointPlan'
 
-const emit = defineEmits(['close'])
+// imported：导入完成通知父级（App 收到后立即执行异常 SVG 检查与修复，无需等下次刷新）
+const emit = defineEmits(['close', 'imported'])
 const store = useProjectStore()
 
 // 空状态快捷上传传入的字体文件：挂载后自动开始解析（无需用户再点选择）
@@ -47,11 +48,9 @@ const keepUnicode = ref(true)
 const showMap = ref(false)
 const mapText = ref('')          // 输入框内手动粘贴的映射
 const mapStatus = ref('')        // 提示文案（应用后显示条数）
-// 映射数据文件名：HTTP 部署时为 public/unicode-map.json；绿色版（file://）为同目录 unicode-map.data.js
-// —— 两种形态都可直接点击打开编辑，保存后刷新即生效（详见 lib/unicodeMap.js 的数据来源说明）
-const mapFileName = typeof location !== 'undefined' && location.protocol === 'file:'
-  ? 'unicode-map.data.js'
-  : 'unicode-map.json'
+// 映射数据文件名：开发版与构建版统一使用 public/unicode-map.data.js（内容即 JSON）
+// 点击链接可直接打开编辑，保存后刷新页面即生效（详见 lib/unicodeMap.js 的数据来源说明）
+const mapFileName = 'unicode-map.data.js'
 const builtinMap = ref({})       // 从 json 读取到的映射（{hex: name}），未应用前不生效
 const builtinLoaded = ref(false)
 const unicodeNameMap = ref({})   // 已应用的合并映射（json + 输入框粘贴），用于解析补名
@@ -262,6 +261,7 @@ function commitImport(items) {
   }
   const res = store.addIcons(items)
   if (res.overflow) alert(res.overflow)
+  emit('imported') // 通知父级：新数据入库后立即做一次异常检查/修复
   emit('close')
 }
 
@@ -282,10 +282,11 @@ function doImport(indices) {
   }))
   const res = store.addIcons(items)
   if (res.overflow) alert(res.overflow)
+  emit('imported')
   emit('close')
 }
 
-// #8：应用映射（点击按钮后，把 json 文件映射 + 输入框映射合并应用，用于解析补名）
+// #8：应用映射（点击按钮后，把文件映射 + 输入框映射合并应用，用于解析补名）
 function applyMap() {
   const merged = { ...builtinMap.value }
   const pasted = parseUnicodeMap(mapText.value)
