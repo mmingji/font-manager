@@ -24,12 +24,18 @@ const readme = `SnFont 图标管理 · 绿色免安装版
 图标项目数据保存在浏览器本地（IndexedDB，与解压位置所在的 file:// 来源绑定）。
 - 换电脑、换浏览器、清理浏览器数据之前，请用「导出 ▾ → 下载项目」保存 Project 备份；
 - 在新环境用「导入 ▾ → 导入 SVG」选择该 project.json 即可完整恢复项目。
-- 建议固定解压位置（移动文件夹后浏览器会视为新的来源，读取不到旧数据）。
+- 建议固定解压位置（移动文件夹后，浏览器会视为新的来源，读取不到旧数据）。
 
-【图标名称映射表（可自行编辑）】
-本目录下的 unicode-map.data.js 就是名称映射表（内容为 JSON 格式）。
-用记事本等编辑器修改其中的名称后保存，刷新页面即生效（解析字体自动命名、「设置 → 按映射批量改名」、
-码位占用统计都会按新映射工作）。
+【可编辑的配置文件（改完保存，刷新页面即生效）】
+1) unicode-map.data.js —— 图标名称映射表（内容为 JSON 格式）
+   解析字体自动命名、「设置 → 按映射批量改名」、码位占用统计都会按它工作。
+2) codepoint-plan.data.js —— 码位规划配置（内容为 JSON 格式）
+   其中 project_alloc.start / end 决定本项目「保留区」范围（默认 U+EE00–U+EFFF，512 个）：
+   新建/导入图标时的自动分配码位从 start 起顺序取用，用满后顺延。
+   修改后刷新页面生效；「设置 → 码位占用」面板会显示当前生效范围。
+
+提示：两个 .data.js 与 index.html 在同一目录，用记事本等编辑器直接改即可。
+     若删除了这两个文件，应用仍可正常使用（改用内置的默认配置快照）。
 
 【功能一览】
 导入 SVG / 图片转 SVG（位图矢量化）/ 解析字体（ttf/otf/woff/woff2）→ 图标管理 → 一键导出
@@ -42,7 +48,7 @@ if (!fs.existsSync(DIST) || !fs.existsSync(path.join(DIST, 'index.html'))) {
   process.exit(1)
 }
 // 绿色版只需 index.html（JS/CSS/wasm/映射表已内联，favicon 已内联为 data URI）
-// + 两个"可编辑数据文件"（用户改映射表后刷新即生效）
+// + 两个"可编辑数据文件"（用户改映射表/码位规划后刷新即生效）
 const KEEP = ['index.html', 'unicode-map.data.js', 'codepoint-plan.data.js']
 const folder = zip.folder('SnFont')
 for (const name of KEEP) {

@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { loadProject, saveProject, loadProjectFromIdb } from '../lib/persist.js'
 import { normalizeSvg } from '../lib/buildFont.js'
 import { groupKeyOf, pinyinFullKey } from '../lib/pinyin.js'
-import { isInReserved, isBaseAscii, reservedUsage, RESERVED_END } from '../lib/codepointPlan.js'
+import { isInReserved, isBaseAscii, reservedUsage, RESERVED } from '../lib/codepointPlan.js'
 
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
@@ -59,7 +59,8 @@ export const useProjectStore = defineStore('project', {
       // 分配区间：U+EE00–U+EFFF（512 个），避开参考字体已占用的 E000–E8CC / F000+ 码位
       // 旧项目 nextCode 已推进过也保留（不回退），新图标统一从 EE00 起按序取用；
       // 若 EE00–EFFF 用尽则自然顺延（512 个通常足够一个图标项目）
-      nextCode: saved?.nextCode || 0xee00,
+      // 分配起点跟随码位规划配置（public/codepoint-plan.json 的 project_alloc.start，默认 EE00）
+      nextCode: saved?.nextCode || RESERVED.start,
       // 启动完成标志：首帧渲染前先完成 IDB hydrate，避免「先空白再闪现完整列表」
       booted: false
     }
@@ -208,12 +209,14 @@ export const useProjectStore = defineStore('project', {
       this.persist()
       const after = reservedUsage(this.icons)
       let overflow = ''
+      // 提示文案里的范围跟随配置（U+EE00–U+EFFF 为默认规划）
+      const rangeLabel = 'U+' + RESERVED.start.toString(16).toUpperCase() + '–U+' + RESERVED.end.toString(16).toUpperCase()
       if (before.free > 0 && after.free === 0) {
-        overflow = '⚠️ 本项目保留区（U+EE00–U+EFFF，512 个）已用满，新增图标将顺延到 U+F000 之后'
+        overflow = `⚠️ 本项目保留区（${rangeLabel}，${RESERVED.end - RESERVED.start + 1} 个）已用满，新增图标将顺延到 ${rangeLabel.split('–')[1]} 之后`
       } else if (before.free === 0) {
         // 导入前就已满：若本次新增了自动分配图标且其码位越过保留区
-        const beyond = added.some((i) => i.code > RESERVED_END && !items.some((it) => it.code != null))
-        if (beyond) overflow = '⚠️ 本项目保留区（U+EE00–U+EFFF）此前已满，本次新增图标已顺延到 U+F000 之后'
+        const beyond = added.some((i) => i.code > RESERVED.end && !items.some((it) => it.code != null))
+        if (beyond) overflow = `⚠️ 本项目保留区（${rangeLabel}）此前已满，本次新增图标已顺延到其后`
       }
       return { added, codeAlerts, overflow }
     },

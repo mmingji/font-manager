@@ -3,11 +3,21 @@ import { ref, onMounted } from 'vue'
 import { useProjectStore } from '../store/project'
 import { loadBuiltinMap } from '../lib/unicodeMap'
 import { computeReferenceOccupancy } from '../lib/codepointStats'
+import { RESERVED } from '../lib/codepointPlan'
 
 const emit = defineEmits(['close'])
 const store = useProjectStore()
 
 const SVG_SIZES = [128, 512, 1024]
+
+// 配置文件链接：HTTP 部署指向 public 下 json；绿色版（file://）指向同目录可编辑的 .data.js
+// 两者都可点击打开编辑，保存后刷新页面即生效（映射表 / 码位规划均如此）
+// 保留区范围标签（跟随码位规划配置，见 lib/codepointPlan.js 的 RESERVED）
+const reservedRangeLabel = `U+${RESERVED.start.toString(16).toUpperCase()}–U+${RESERVED.end.toString(16).toUpperCase()}`
+
+const isFileProtocol = typeof location !== 'undefined' && location.protocol === 'file:'
+const mapFileName = isFileProtocol ? 'unicode-map.data.js' : 'unicode-map.json'
+const planFileName = isFileProtocol ? 'codepoint-plan.data.js' : 'codepoint-plan.json'
 const WEIGHTS = [
   { value: 'regular', label: '常规体 Regular' },
   { value: 'bold', label: '粗体 Bold' }
@@ -161,16 +171,24 @@ async function applyMapRename() {
             <h4>码位占用</h4>
             <button class="small" @click="refreshOccupancy">刷新统计</button>
           </div>
-          <p class="panel-desc">参考映射 <code>unicode-map.json</code> 占用统计（打开即刷新，页面刷新后重新分析）：</p>
+          <p class="panel-desc">
+            参考映射 <a :href="'./' + mapFileName" target="_blank" class="cfg-link" title="点击打开该配置文件，编辑保存后刷新页面即生效">{{ mapFileName }}</a>
+            占用统计（打开即刷新，页面刷新后重新分析）：
+          </p>
           <template v-if="refStats">
             <p class="cp-line"><b>参考字体占用总量：</b>{{ refStats.total }} 个码位</p>
-            <p class="cp-line"><b>本项目保留区</b>（U+EE00–U+EFFF，512 个）：{{ refStats.reserved.occupied }} 个已被参考字体占用</p>
+            <p class="cp-line"><b>本项目保留区</b>（{{ reservedRangeLabel }}，{{ refStats.reserved.size }} 个）：{{ refStats.reserved.occupied }} 个已被参考字体占用</p>
             <div class="cp-seg" v-for="s in refStats.sections" :key="s.range">
               <span class="seg-range">{{ s.range }}</span>
               <span class="seg-bar"><i :style="{ width: (s.occupied / s.size * 100) + '%' }"></i></span>
               <span class="seg-count">{{ s.occupied }} / {{ s.size }}</span>
             </div>
-            <p class="cp-note">本项目新增图标按顺序取用保留区 <b>U+EE00–U+EFFF</b>；导入字形原码位落在此区间时会提醒。</p>
+            <p class="cp-note">
+              本项目新增图标按顺序取用保留区 <b>{{ reservedRangeLabel }}</b>；导入字形原码位落在此区间时会提醒。<br />
+              保留区范围可在
+              <a :href="'./' + planFileName" target="_blank" class="cfg-link" title="点击打开该配置文件，编辑 project_alloc.start/end 后刷新页面即生效">{{ planFileName }}</a>
+              的 project_alloc 中修改（保存后刷新页面生效）。
+            </p>
           </template>
           <p v-else-if="refStatsError" class="cp-error">{{ refStatsError }}</p>
         </section>
@@ -291,6 +309,15 @@ button.small:disabled { opacity: 0.5; cursor: not-allowed; }
 .mr-status { margin: 0; font-size: 12px; color: var(--primary); }
 .cp-line b { font-family: Consolas, monospace; color: var(--text); }
 .cp-note { color: var(--text-2); }
+
+/* 配置文件链接：与字体解析弹窗的映射文件链接风格一致 */
+.cfg-link {
+  color: var(--primary);
+  text-decoration: none;
+  border-bottom: 1px dashed currentColor;
+  cursor: pointer;
+}
+.cfg-link:hover { color: var(--primary-dark); }
 .cp-error { color: #c03535; }
 .cp-seg { display: flex; align-items: center; gap: 10px; font-size: 12px; }
 .seg-range { width: 84px; font-family: Consolas, monospace; color: var(--text-2); }

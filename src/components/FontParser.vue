@@ -47,7 +47,11 @@ const keepUnicode = ref(true)
 const showMap = ref(false)
 const mapText = ref('')          // 输入框内手动粘贴的映射
 const mapStatus = ref('')        // 提示文案（应用后显示条数）
-const mapFileName = 'unicode-map.json'  // 内置映射文件名（public/ 下，可直接点击打开）
+// 映射数据文件名：HTTP 部署时为 public/unicode-map.json；绿色版（file://）为同目录 unicode-map.data.js
+// —— 两种形态都可直接点击打开编辑，保存后刷新即生效（详见 lib/unicodeMap.js 的数据来源说明）
+const mapFileName = typeof location !== 'undefined' && location.protocol === 'file:'
+  ? 'unicode-map.data.js'
+  : 'unicode-map.json'
 const builtinMap = ref({})       // 从 json 读取到的映射（{hex: name}），未应用前不生效
 const builtinLoaded = ref(false)
 const unicodeNameMap = ref({})   // 已应用的合并映射（json + 输入框粘贴），用于解析补名
@@ -368,7 +372,7 @@ function miniSvg(svg) {
         <div v-if="showMap" class="map-box">
           <p class="map-desc">
             <template v-if="builtinLoaded">
-              映射文件 <a :href="'./' + mapFileName" target="_blank" class="map-file-link" title="点击打开/下载该 json">{{ mapFileName }}</a>
+              映射文件 <a :href="'./' + mapFileName" target="_blank" class="map-file-link" title="点击打开该配置文件，编辑保存后刷新页面即生效">{{ mapFileName }}</a>
               （读取到 {{ Object.keys(builtinMap).length }} 条映射关系），点击下方「应用映射」后生效，解析字形时自动命名。<br />
             </template>
             也可在下方输入框粘贴映射内容补充/覆盖。<small>格式示例：{"trash":"f1f8"}</small>

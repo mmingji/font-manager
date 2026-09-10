@@ -3,6 +3,7 @@
 // 基于最新映射内容重新分析各码位段占用情况（不依赖静态 json，保证刷新即最新）
 import mapJsonInline from '../assets/unicode-map.json?url'
 import { loadDataScript } from './loadDataScript.js'
+import { RESERVED } from './codepointPlan.js'
 const MAP_URL = './unicode-map.json'
 
 // 数据来源优先级同 lib/unicodeMap.js：HTTP fetch json → file:// 用 data.js 全局数据 → 构建内联快照兜底
@@ -52,7 +53,8 @@ export function analyzeOccupancy(codeSet) {
       { range: 'F000–F0FF', start: 0xF000, end: 0xF0FF, size: 0xF0FF - 0xF000 + 1, occupied: count(0xF000, 0xF0FF) },
       { range: 'F100–F8FF', start: 0xF100, end: 0xF8FF, size: 0xF8FF - 0xF100 + 1, occupied: count(0xF100, 0xF8FF) }
     ],
-    reserved: { start: 0xEE00, end: 0xEFFF, size: 0xEFFF - 0xEE00 + 1, occupied: count(0xEE00, 0xEFFF) }
+    // 本项目保留区：跟随码位规划配置（codepoint-plan.json 的 project_alloc）
+    reserved: { start: RESERVED.start, end: RESERVED.end, size: RESERVED.end - RESERVED.start + 1, occupied: count(RESERVED.start, RESERVED.end) }
   }
 }
 
