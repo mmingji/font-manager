@@ -1,10 +1,10 @@
 // 参考字体映射占用动态统计
 // 页面刷新/打开时调用 computeReferenceOccupancy(true)，强制重新读取 unicode-map.data.js，
-// 基于最新映射内容重新分析各码位段占用情况（不依赖静态 json，保证刷新即最新）
-import mapJsonInline from '../assets/unicode-map.json?url'
+// 基于最新映射内容重新分析各码位段占用情况（每次都重新加载映射文件，保证刷新即最新）
+import mapJsonInline from '../assets/map-snapshot.json?url'
 import { loadDataScript } from './loadDataScript.js'
 import { RESERVED } from './codepointPlan.js'
-const MAP_URL = './unicode-map.json'
+
 
 // 数据来源同 lib/unicodeMap.js：动态加载 unicode-map.data.js → 缺失时用构建内联快照
 async function fetchMapJson() {

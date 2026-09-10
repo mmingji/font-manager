@@ -152,7 +152,11 @@ async function applyMapRename() {
             <h4>按 unicode 映射批量改名</h4>
             <button class="small" :disabled="mapLoading" @click="applyMapRename">{{ mapLoading ? '处理中…' : '应用映射改名' }}</button>
           </div>
-          <p class="panel-desc">读取 public/unicode-map.json，把当前项目中 unicode 命中映射的图标统一改成 json 中的名称（改 json 后点此即生效）。</p>
+          <p class="panel-desc">
+            读取
+            <a :href="'./' + mapFileName" target="_blank" class="cfg-link" @click.stop title="点击打开该配置文件，编辑保存后刷新页面即生效">{{ mapFileName }}</a>
+            ，把当前项目中 unicode 命中映射的图标统一改成该文件中的名称（改完保存、刷新页面后点此即生效）。
+          </p>
           <p v-if="mapStatus" class="mr-status">{{ mapStatus }}</p>
         </section>
 

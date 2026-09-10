@@ -51,13 +51,13 @@ const mapStatus = ref('')        // 提示文案（应用后显示条数）
 // 映射数据文件名：开发版与构建版统一使用 public/unicode-map.data.js（内容即 JSON）
 // 点击链接可直接打开编辑，保存后刷新页面即生效（详见 lib/unicodeMap.js 的数据来源说明）
 const mapFileName = 'unicode-map.data.js'
-const builtinMap = ref({})       // 从 json 读取到的映射（{hex: name}），未应用前不生效
+const builtinMap = ref({})       // 从映射文件读取到的映射（{hex: name}），未应用前不生效
 const builtinLoaded = ref(false)
-const unicodeNameMap = ref({})   // 已应用的合并映射（json + 输入框粘贴），用于解析补名
+const unicodeNameMap = ref({})   // 已应用的合并映射（映射文件 + 输入框粘贴），用于解析补名
 
 const fileInfo = ref(null)
 
-// 挂载时读取映射 json（仅计数，不应用；点"应用映射"才生效）
+// 挂载时读取映射文件（仅计数，不应用；点"应用映射"才生效）
 onMounted(async () => {
   const map = await loadBuiltinMap()
   if (Object.keys(map).length) {
@@ -290,15 +290,15 @@ function doImport(indices) {
 function applyMap() {
   const merged = { ...builtinMap.value }
   const pasted = parseUnicodeMap(mapText.value)
-  Object.assign(merged, pasted) // 输入框粘贴覆盖 json
+  Object.assign(merged, pasted) // 输入框粘贴覆盖映射文件
   if (!Object.keys(merged).length) {
-    mapStatus.value = '未找到有效映射：请确认映射 json 存在且格式正确'
+    mapStatus.value = '未找到有效映射：请确认映射文件 unicode-map.data.js 存在且格式正确'
     return
   }
   unicodeNameMap.value = merged
-  const jsonN = Object.keys(builtinMap.value).length
+  const fileN = Object.keys(builtinMap.value).length
   const pasteN = Object.keys(pasted).length
-  mapStatus.value = '已应用 json 文件 ' + jsonN + ' 条' + (pasteN ? '、输入框 ' + pasteN + ' 条' : '') + '映射关系'
+  mapStatus.value = '已应用映射文件 ' + fileN + ' 条' + (pasteN ? '、输入框 ' + pasteN + ' 条' : '') + '映射关系'
   // 已解析的图标按最新映射重新补名
   if (parsed.value.length) {
     parsed.value = applyUnicodeNameMap(parsed.value, unicodeNameMap.value)

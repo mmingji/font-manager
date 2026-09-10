@@ -15,8 +15,8 @@ fs.mkdirSync(to, { recursive: true })
 
 // 1) 由 data.js 提取 JSON → src/assets/*.json（内联兜底快照）
 const DATASETS = [
-  ['unicode-map.data.js', 'unicode-map.json', '__SNFONT_UNICODE_MAP__'],
-  ['codepoint-plan.data.js', 'codepoint-plan.json', '__SNFONT_CODEPOINT_PLAN__']
+  ['unicode-map.data.js', 'map-snapshot.json', '__SNFONT_UNICODE_MAP__'],
+  ['codepoint-plan.data.js', 'plan-snapshot.json', '__SNFONT_CODEPOINT_PLAN__']
 ]
 const extracted = []
 for (const [jsFile, jsonFile, globalName] of DATASETS) {

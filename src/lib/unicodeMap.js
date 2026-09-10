@@ -7,8 +7,8 @@
 
 // 加载内置映射表（从 public 静态资源；force=true 时绕过内存缓存重新拉取）
 // 运行时动态加载（带时间戳）：确保打开/刷新页面时总是读取磁盘上的最新映射文件
-// 绿色免安装版（file://）无法 fetch 外部文件：回退到构建时内联的 json 快照（dataURL）
-import mapJsonInline from '../assets/unicode-map.json?url'
+// 映射文件缺失/加载失败时：回退到构建时内联的快照（src/assets/map-snapshot.json，由 data.js 提取）
+import mapJsonInline from '../assets/map-snapshot.json?url'
 import { loadDataScript } from './loadDataScript.js'
 
 // 数据来源（开发版与构建版一致，统一用 unicode-map.data.js）：

@@ -4,7 +4,7 @@
 // 可配置：public/codepoint-plan.data.js 的 project_alloc.start/end 会覆盖下面默认值
 //（绿色版读同目录 codepoint-plan.data.js；改文件后刷新页面即生效，见 initCodepointPlan）
 import { loadDataScript } from './loadDataScript.js'
-import planInline from '../assets/codepoint-plan.json?url'
+import planInline from '../assets/plan-snapshot.json?url'
 
 // 默认保留区（与 public/codepoint-plan.data.js 的 project_alloc 一致）；运行时可能被配置覆盖
 export const RESERVED = { start: 0xee00, end: 0xefff }
