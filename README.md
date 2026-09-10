@@ -17,9 +17,9 @@
 | 码位规划    | 新增图标从 U+EE00–U+EFFF 保留区(512 个)顺序分配，避开参考字体已占区；allocateCode 双向跳过已占用                                                                                                                                |
 | 数据持久化   | IndexedDB 主存储 + localStorage 快照：数千图标不丢；写队列串行 + 刷新前同步兜底；启动 boot gate 避免大数据先空白                                                                                                                     |
 | 启动自检    | 按需检测异常 SVG 坐标（越界→归一化 0~1000）；仅确有异常才提示修复进度，正常数据完全静默（幂等）                                                                                                                                           |
-| 离线运行    | 绿色版：双击 dist/index.html 即用（零服务零联网）；如需 HTTP 部署仍可用任意静态托管（dist/ 亦可） |
+| 离线运行    | 绿色版：双击 dist/index.html 即用（零服务零联网）；如需 HTTP 部署仍可用任意静态托管（dist/ 亦可）                                                                                                                                  |
 | 图片转 SVG | 拖入/多选位图 → potrace(WASM) 矢量化（阈值/反色/去噪点实时调参自动重转）→ 按项目 SVG 尺寸大预览 + 网格（改名/勾选/单张下载/下载全部）→ 导入；图标卡「替换」走同一弹窗（预览后替换，支持 svg 文件）                                                                            |
-| 绿色免安装版   | 构建产物为**单个 index.html**（JS/CSS/wasm/映射表全部内联）：解压后双击即用，无需安装、无需启动服务、不联网；`npm run pack` 一键打包成 SnFont-便携版.zip |
+| 绿色免安装版  | 构建产物为**单个 index.html**（JS/CSS/wasm/映射表全部内联）：解压后双击即用，无需安装、无需启动服务、不联网；`npm run pack` 一键打包成 SnFont-便携版.zip                                                                                          |
 
 ## 技术栈
 
@@ -92,7 +92,7 @@ src/
 - 图标码位永久固定；新增从 U+EE00+ 保留区分配，与参考字体不冲突
 - 字重只影响产物文件名与字母/符号字形；图标名/unicode/css 类名与字重无关
 - 生成字体过程不出现任何第三方图标库名称
-- **内置名称映射文件（public/unicode-map.data.js）中的图标命名来自 Font Awesome v7.3.1 的命名**；
+- 内置名称映射文件（public/unicode-map.data.js）中的图标命名来自 Font Awesome v7.3.1 的命名；
   该文件仅为「码位 → 名称」的命名参考数据（不含其字体、图标资源或代码），可自行编辑维护
 - 数据文件统一为经典脚本形态（开发/构建/绿色版一致，内容即 JSON，编辑后刷新即生效）：
   public/unicode-map.data.js（图标名称映射表）、public/codepoint-plan.data.js（码位规划配置，project_alloc.start/end 决定保留区）
