@@ -1,10 +1,10 @@
-// 码位规划基线（保留区/参考占用段）（绿色版可编辑数据文件）
-// 内容与 public/codepoint-plan.json 相同；直接编辑本文件保存后，刷新页面即生效。
-// file:// 下浏览器禁止 fetch 本地文件，故用经典 script 提供数据（HTTP 部署时仍优先读取 codepoint-plan.json）。
+// 码位规划配置（本项目唯一数据源；内容即 JSON 格式）
+// 开发版 / 构建版 / 绿色免安装版统一读取本文件：运行时动态加载并带时间戳，编辑保存后刷新页面即生效。
+// 若删除本文件，应用会回退到构建时内联的快照（仍可正常使用，只是不能再编辑该配置）。
 window.__SNFONT_CODEPOINT_PLAN__ = {
   "version": 1,
   "generatedAt": "2026-09-08T07:06:17.408Z",
-  "description": "码位规划：三段 Unicode 私人使用区(PUA)分布、参考映射占用动态统计、本项目（以当前项目名为准）图标码位分配规则。占用数字为运行时按最新 unicode-map.json 动态计算，刷新页面后自动更新（见 codepointStats.js）",
+  "description": "码位规划：三段 Unicode 私人使用区(PUA)分布、参考映射占用动态统计、本项目（以当前项目名为准）图标码位分配规则。占用数字为运行时按最新 unicode-map.data.js 动态计算，刷新页面后自动更新（见 codepointStats.js）",
   "pua_ranges": {
     "pua_bmp": {
       "label": "私有使用区 (PUA, BMP)",
@@ -29,7 +29,7 @@ window.__SNFONT_CODEPOINT_PLAN__ = {
     }
   },
   "reference_occupancy": {
-    "source": "unicode-map.json（参考图标集 v7.3.1 映射，4331 项）",
+    "source": "unicode-map.data.js（参考图标集 v7.3.1 映射，4331 项）",
     "total_entries": 4331,
     "total_occupied_codepoints": 4293,
     "bmp_span": {
@@ -74,7 +74,7 @@ window.__SNFONT_CODEPOINT_PLAN__ = {
       }
     ],
     "dynamic": true,
-    "note": "下列数字为一次性快照（生成时的参考值）；页面刷新或点击「刷新统计」会按最新 unicode-map.json 重新分析（codepoint-stats）"
+    "note": "下列数字为一次性快照（生成时的参考值）；页面刷新或点击「刷新统计」会按最新 unicode-map.data.js 重新分析（codepoint-stats）"
   },
   "project_alloc": {
     "range": "EE00–EFFF",

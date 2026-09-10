@@ -8,7 +8,7 @@ const DIST = 'dist'
 const OUT = 'SnFont-便携版.zip'
 const DESC = '使用说明.txt'
 
-const readme = `SnFont 图标管理 · 绿色免安装版
+const readme = `SnFont 字体图标管理 · 绿色免安装版
 =====================================
 
 【怎么用】
@@ -42,6 +42,13 @@ const readme = `SnFont 图标管理 · 绿色免安装版
 【功能一览】
 导入 SVG / 图片转 SVG（位图矢量化）/ 解析字体（ttf/otf/woff/woff2）→ 图标管理 → 一键导出
 ttf/woff/woff2 + css + demo.html（支持 GSUB 连字：文字里输入图标名自动替换）。
+
+【研发方式与许可】
+本软件为 AI 辅助编程产物：需求与验收由作者 sn476 完成，代码实现由 DeepSeek Harness 的 AI 编码代理生成
+（使用模型：deepseek-v4-flash-vision-exp）。
+本项目代码以 MIT 许可发布；内置的图片矢量化组件 esm-potrace-wasm 为 GPL-2.0
+（自己使用/内部使用不受影响；对外分发本软件时需遵守 GPL-2.0 并随附许可文本与源码获取方式）。
+内置名称映射文件中的图标命名来自 Font Awesome v7.3.1 的命名（仅为「码位 → 名称」的命名参考数据）。
 `
 
 const zip = new JSZip()

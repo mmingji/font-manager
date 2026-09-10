@@ -7,7 +7,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-const FILES = ['unicode-map.json', 'codepoint-plan.json', 'woff2.wasm']
 const from = 'public'
 const to = 'src/assets'
 
